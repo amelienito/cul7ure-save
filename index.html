@@ -145,6 +145,9 @@ textarea.notes{width:100%;min-height:90px;border-radius:12px;border:1px solid va
 .nextlist b{font-weight:700}
 .nextlist span{font-size:13px;color:var(--muted);white-space:nowrap}
 .welcome{max-width:780px}
+.hello{border-color:var(--lilac);background:linear-gradient(135deg,rgba(64,54,160,.45),rgba(26,23,70,.92) 70%)}
+ol.how{margin:6px 0 10px;padding-left:22px;font-size:15.5px;line-height:1.7;color:var(--soft)}
+ol.how b{color:var(--ink)}
 .steps3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:18px 0}
 @media (max-width:760px){.steps3{grid-template-columns:1fr}}
 .steps3 div{padding:16px;border-radius:16px;border:1px solid var(--line);background:rgba(7,6,26,.35)}
@@ -448,8 +451,8 @@ footer{margin-top:44px;font-size:13px;color:var(--faint);text-align:center;line-
   <div id="dlgMore" hidden>
     <details open>
       <summary>Inviter l’autre</summary>
-      <p class="note">Un lien qui branche le site d’un coup (adresse, code et prénom). Envoie-le en privé : il contient le code.</p>
-      <div class="act" style="justify-content:flex-start"><button class="btn ghost sm" type="button" id="invite">Copier le lien pour <span id="inviteWho">l’autre</span></button></div>
+      <p class="note">Un lien qui branche le site d’un coup, avec un message déjà écrit. Envoie-le en privé : il contient le code.</p>
+      <div class="act" style="justify-content:flex-start"><button class="btn ghost sm" type="button" id="invite">Envoyer le lien à <span id="inviteWho">l’autre</span></button></div>
     </details>
     <details>
       <summary>Les liens des Google Docs</summary>

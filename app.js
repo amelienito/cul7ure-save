@@ -239,9 +239,31 @@
     cfg.code = p.get("cle").trim().toLowerCase(); ls("code", cfg.code);
     if (p.get("script")) { cfg.script = p.get("script"); ls("script", cfg.script); }
     if (QUI.indexOf(p.get("qui")) >= 0) { cfg.qui = p.get("qui"); ls("qui", cfg.qui); }
+    ls("bienvenue", "1");
+    if (cfg.qui) ls("invite-" + other(cfg.qui), "1");
     history.replaceState(null, "", location.pathname + location.search + "#/");
     setTimeout(function () { toast(cfg.qui ? "C’est branché. Salut " + cfg.qui + " !" : "C’est branché."); }, 500);
     return true;
+  }
+
+  function inviteUrl(qui) {
+    var q = new URLSearchParams({ cle: cfg.code });
+    if (cfg.script !== CONF.script) q.set("script", cfg.script);
+    if (qui) q.set("qui", qui);
+    return location.origin + location.pathname + "#" + q.toString();
+  }
+  function shareInvite(qui) {
+    var n = ALL.filter(function (a) { return !a.manquant && a.rel === qui; }).length;
+    var nom = qui === "Florian" ? "Flo" : qui;
+    var text = "Salut " + nom + " ! Voilà le site pour relire les archives de Cul7ure et choisir les articles du livre. " +
+      "Ouvre ce lien dans ton navigateur : tout se branche tout seul, rien à installer. Garde-le, il marche aussi sur ton ordi. " +
+      "Tu as " + n + " articles à relire, et tu corriges le texte directement sur le site.";
+    var url = inviteUrl(qui);
+    if (navigator.share) {
+      navigator.share({ title: "Cul7ure · les archives", text: text, url: url }).catch(function (e) {
+        if (e && e.name !== "AbortError") copier(text + "\n" + url, "Message copié. Colle-le à " + qui + " en privé.");
+      });
+    } else copier(text + "\n" + url, "Message copié. Colle-le à " + qui + " en privé.");
   }
 
   // ------------------------------------------------------------------ le script Google
@@ -468,6 +490,25 @@
     var relu = mine.filter(function (a) { return a.statut === "relu"; }).length;
     var q = myQueue(), first = q[0];
     root.appendChild(h("h1", { class: "page", text: "Salut " + cfg.qui + "." }));
+    if (ls("bienvenue") === "1") {
+      root.appendChild(h("section", { class: "card hello", style: "margin-bottom:18px" },
+        h("h2", { class: "sec", text: "Bienvenue ! Tout est déjà branché." }),
+        h("ol", { class: "how" },
+          h("li", { html: "Clique <b>Commencer la relecture</b> : le texte de ton prochain article s’ouvre." }),
+          h("li", { html: "Corrige-le directement dans la page, puis clique <b>C’est relu</b>." }),
+          h("li", { html: "Dis si tu le veux dans le livre (<b>oui</b>, <b>peut-être</b> ou <b>non</b>), et passe au suivant." })),
+        h("p", { class: "small", text: "Tout s’enregistre tout seul dans les Google Docs. Tu peux t’arrêter et reprendre quand tu veux." }),
+        h("button", { class: "btn main sm", type: "button", text: "Compris", onclick: function () { ls("bienvenue", null); render(true); } })));
+    }
+    var autreActif = ALL.some(function (a) { return a.majPar === o; });
+    if (!autreActif && !ls("invite-" + o)) {
+      root.appendChild(h("section", { class: "card hello", style: "margin-bottom:18px" },
+        h("h2", { class: "sec", text: "Invite " + o }),
+        h("p", { class: "hint", text: "Envoie-lui ce lien : en l’ouvrant, il arrive directement sur sa liste, déjà connecté. Il n’a rien à installer ni à taper." }),
+        h("div", { style: "display:flex;gap:12px;flex-wrap:wrap;align-items:center" },
+          h("button", { class: "btn main", type: "button", text: "Envoyer le lien à " + o, onclick: function () { shareInvite(o); } }),
+          h("button", { class: "lnk", type: "button", text: "C’est fait, masquer", onclick: function () { ls("invite-" + o, "1"); render(true); } }))));
+    }
     root.appendChild(h("p", { class: "lead", html: "Ta mission : relire tes <b>" + nf.format(mine.length) + " articles</b> (les textes d’" + esc(o) + " et une partie des autres plumes), puis dire lesquels tu veux dans le livre. Tu corriges directement ici." }));
     var hero = h("section", { class: "hero-next" });
     if (first) {
@@ -1476,10 +1517,8 @@
     toast("Débranché.");
   });
   $("invite").addEventListener("click", function () {
-    var q = new URLSearchParams({ cle: cfg.code });
-    if (cfg.script !== CONF.script) q.set("script", cfg.script);
-    if (cfg.qui) q.set("qui", other(cfg.qui));
-    copier(location.origin + location.pathname + "#" + q.toString(), "Lien copié. Envoie-le à " + (cfg.qui ? other(cfg.qui) : "l’autre") + " en privé.");
+    if (cfg.qui) shareInvite(other(cfg.qui));
+    else copier(inviteUrl(""), "Lien copié. Envoie-le en privé.");
   });
   function liensNow() {
     toast("Recherche des Docs dans le Drive… (jusqu’à une minute)", { ms: 60000 });
