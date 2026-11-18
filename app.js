@@ -712,9 +712,17 @@
     var frag = document.createDocumentFragment();
     rows.forEach(function (a) {
       var r = rubOf(a.rub), open = S.open === a.id;
-      var tr = h("tr", { class: "a" + (open ? " open" : ""), tabindex: "0", "aria-expanded": open ? "true" : "false" },
+      var topSt = a.tags.length ? TAGS[a.tags[0]].st : "";
+      var prClass = (topSt === "critical" || topSt === "serious" || topSt === "warn") ? " pr-" + topSt : "";
+      var titleCell = h("div", { class: "ti" + (a.manquant ? " miss" : "") });
+      if (topSt === "critical" || topSt === "serious") {
+        var mic = icon(topSt, 15); mic.classList.add("mini-ic"); mic.setAttribute("title", TAGS[a.tags[0]].one);
+        titleCell.appendChild(mic);
+      }
+      titleCell.appendChild(document.createTextNode(a.titre));
+      var tr = h("tr", { class: "a" + prClass + (open ? " open" : ""), tabindex: "0", "aria-expanded": open ? "true" : "false" },
         h("td", { class: "dt tab", text: dateFr(a.date) }),
-        h("td", {}, h("div", { class: "ti" + (a.manquant ? " miss" : ""), text: a.titre })),
+        h("td", {}, titleCell),
         h("td", { class: "hm" }, h("span", { class: "rb" }, h("span", { class: "sw", style: "background:" + r.hex }), a.rub || "—")),
         h("td", { class: "au hm", text: a.auteur || "—" }),
         h("td", { class: "mo tab hm", text: a.mots ? nf.format(a.mots) : "—" }),
