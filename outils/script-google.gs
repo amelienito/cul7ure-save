@@ -4,8 +4,9 @@
  * Ce script fait trois choses :
  *   1. il crée le Google Sheet de suivi, rempli avec les 247 articles et la répartition de la relecture ;
  *   2. il retrouve le lien de chaque Google Doc dans le dossier Drive des archives (et le met à jour toutes les heures) ;
- *   3. il permet au site (amelienito.github.io/cul7ure-save) de lire et d'écrire dans ce Sheet,
- *      pour cocher « Relu », voter pour le livre ou laisser une note sans ouvrir le Sheet.
+ *   3. il permet au site (amelienito.github.io/cul7ure-save) de lire et d'écrire dans ce Sheet
+ *      (relu, votes pour le livre, notes) ET dans les Google Docs : on corrige le texte sur le site,
+ *      le Doc est mis à jour. L'historique des versions de chaque Doc garde tout, au cas où.
  *
  * Installation (une seule fois, sur ordinateur) :
  *   a. Colle tout ce fichier dans un nouveau projet sur script.google.com, puis enregistre (icône disquette).
@@ -279,6 +280,7 @@ function doGet(e) {
   return repondre_(function () {
     var p = (e && e.parameter) || {};
     verifier_(p.code);
+    if (p.action === "doc") return lireDoc_(p.id);
     if (p.action === "liens") {
       var r = liens();
       var d = lire_();
@@ -299,6 +301,7 @@ function doPost(e) {
     try {
       var sh = ouvrirSheet_(false).getSheetByName(ONGLET);
       var H = entetes_(sh);
+      if (b.action === "ecrireDoc") return ecrireDoc_(sh, H, b, b.qui);
       return { lignes: (b.modifs || []).map(function (m) { return modifier_(sh, H, m, b.qui); }) };
     } finally {
       lock.releaseLock();
@@ -352,12 +355,23 @@ function propre_(k, v) {
   return v;
 }
 
+function ligneDe_(sh, H, id) {
+  var lr = sh.getLastRow();
+  var ids = lr > 1 ? sh.getRange(2, H.id + 1, lr - 1, 1).getValues() : [];
+  for (var i = 0; i < ids.length; i++) if (String(ids[i][0]) === id) return i + 2;
+  throw new Error("Article introuvable dans le Sheet : " + id);
+}
+
+function ligneObjet_(sh, H, ligne) {
+  var tz = Session.getScriptTimeZone();
+  var r = sh.getRange(ligne, 1, 1, sh.getLastColumn()).getValues()[0], o = {};
+  COLONNES.forEach(function (c) { o[c.k] = c.k === "mots" ? (Number(r[H.mots]) || 0) : texte_(r[H[c.k]], tz).trim(); });
+  return o;
+}
+
 function modifier_(sh, H, m, qui) {
-  var lr = sh.getLastRow(), tz = Session.getScriptTimeZone();
-  var ids = sh.getRange(2, H.id + 1, lr - 1, 1).getValues();
-  var ligne = -1;
-  for (var i = 0; i < ids.length; i++) if (String(ids[i][0]) === m.id) { ligne = i + 2; break; }
-  if (ligne < 0) throw new Error("Article introuvable dans le Sheet : " + m.id);
+  var tz = Session.getScriptTimeZone();
+  var ligne = ligneDe_(sh, H, m.id);
   var maintenant = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd HH:mm");
   var champs = m.champs || {};
   Object.keys(champs).forEach(function (k) {
@@ -368,7 +382,141 @@ function modifier_(sh, H, m, qui) {
   });
   sh.getRange(ligne, H.maj + 1).setNumberFormat("@").setValue(maintenant);
   sh.getRange(ligne, H.majPar + 1).setValue(qui);
-  var r = sh.getRange(ligne, 1, 1, sh.getLastColumn()).getValues()[0], o = {};
-  COLONNES.forEach(function (c) { o[c.k] = c.k === "mots" ? (Number(r[H.mots]) || 0) : texte_(r[H[c.k]], tz).trim(); });
-  return o;
+  return ligneObjet_(sh, H, ligne);
+}
+
+// ---------------------------------------------------------------- le texte des Google Docs
+/*
+  Un Doc est lu comme une liste de blocs : { t: type, r: [[texte, "b" et/ou "i", lien]], c: centré }
+  Types : h1, h2, h3 (titres), p (paragraphe), q (citation : retrait, centrée, italique),
+          sig (ligne « Par …, date » : centrée, italique), n (note grise : images, vidéos, source), li (liste).
+  Pour q, sig et n, l'italique fait partie du style : il n'apparaît pas dans les morceaux de texte.
+*/
+function idDuDoc_(url) {
+  var m = String(url || "").match(/\/d\/([a-zA-Z0-9_-]{20,})/);
+  return m ? m[1] : "";
+}
+
+function ouvrirDoc_(sh, H, id) {
+  var ligne = ligneDe_(sh, H, id);
+  var url = String(sh.getRange(ligne, H.gdoc + 1).getValue() || "");
+  var docId = idDuDoc_(url);
+  if (!docId) throw new Error("PAS_DE_DOC");
+  var f = DriveApp.getFileById(docId);
+  if (f.getMimeType() !== MimeType.GOOGLE_DOCS) throw new Error("DOCX");
+  return { ligne: ligne, url: url, doc: DocumentApp.openById(docId) };
+}
+
+function blocsDuDoc_(doc) {
+  var ET = DocumentApp.ElementType, PH = DocumentApp.ParagraphHeading, AL = DocumentApp.HorizontalAlignment;
+  var body = doc.getBody(), out = [], complexe = false;
+  for (var i = 0; i < body.getNumChildren(); i++) {
+    var el = body.getChild(i), type = el.getType();
+    if (type !== ET.PARAGRAPH && type !== ET.LIST_ITEM) { complexe = true; continue; }
+    var p = type === ET.LIST_ITEM ? el.asListItem() : el.asParagraph();
+    for (var j = 0; j < p.getNumChildren(); j++) if (p.getChild(j).getType() !== ET.TEXT) complexe = true;
+    var tx = p.editAsText(), s = tx.getText();
+    if (!s.replace(/[\s\u000b]/g, "")) continue;
+    var hd = p.getHeading(), centre = p.getAlignment() === AL.CENTER, t;
+    if (type === ET.LIST_ITEM) t = "li";
+    else if (hd === PH.TITLE || hd === PH.HEADING1) t = "h1";
+    else if (hd === PH.HEADING2) t = "h2";
+    else if (hd === PH.HEADING3 || hd === PH.HEADING4 || hd === PH.HEADING5 || hd === PH.HEADING6 || hd === PH.SUBTITLE) t = "h3";
+    else if ((tx.getFontSize(0) && tx.getFontSize(0) <= 10) || String(tx.getForegroundColor(0) || "").toLowerCase() === "#808080") t = "n";
+    else if ((p.getIndentStart() || 0) >= 20) t = "q";
+    else t = "p";
+    var runs = [], idx = tx.getTextAttributeIndices().filter(function (x) { return x < s.length; });
+    if (idx[0] !== 0) idx.unshift(0);
+    idx.push(s.length);
+    for (var k = 0; k < idx.length - 1; k++) {
+      var a = idx[k], b = idx[k + 1];
+      if (b <= a) continue;
+      var f = (tx.isBold(a) ? "b" : "") + (tx.isItalic(a) ? "i" : ""), url = tx.getLinkUrl(a) || "";
+      var dernier = runs[runs.length - 1];
+      if (dernier && dernier[1] === f && dernier[2] === url) dernier[0] += s.slice(a, b);
+      else runs.push([s.slice(a, b), f, url]);
+    }
+    var toutItalique = runs.every(function (r) { return r[1].indexOf("i") >= 0 || !r[0].trim(); });
+    if (t === "p" && centre && toutItalique) t = "sig";
+    if ((t === "q" || t === "sig" || t === "n") && toutItalique) runs.forEach(function (r) { r[1] = r[1].replace("i", ""); });
+    var bloc = { t: t, r: runs };
+    if (centre && (t === "p" || t === "h1" || t === "h2" || t === "h3")) bloc.c = 1;
+    out.push(bloc);
+  }
+  return { blocs: out, complexe: complexe };
+}
+
+function empreinte_(blocs) {
+  return Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, JSON.stringify(blocs), Utilities.Charset.UTF_8));
+}
+
+function lireDoc_(id) {
+  var sh = ouvrirSheet_(false).getSheetByName(ONGLET), H = entetes_(sh);
+  var o = ouvrirDoc_(sh, H, id), lu = blocsDuDoc_(o.doc);
+  return { blocs: lu.blocs, complexe: lu.complexe, hash: empreinte_(lu.blocs), gdoc: o.url };
+}
+
+function ecrireBlocs_(doc, blocs) {
+  var PH = DocumentApp.ParagraphHeading, AL = DocumentApp.HorizontalAlignment, body = doc.getBody();
+  body.clear();
+  var liste = null;
+  blocs.forEach(function (b) {
+    var runs = (b.r || []).map(function (r) { return [String(r[0] || "").replace(/\r?\n/g, "\u000b"), String(r[1] || ""), String(r[2] || "")]; });
+    var texte = runs.map(function (r) { return r[0]; }).join("");
+    if (!texte.trim()) return;
+    var p;
+    if (b.t === "li") {
+      p = body.appendListItem(texte).setGlyphType(DocumentApp.GlyphType.BULLET);
+      if (liste) p.setListId(liste); else liste = p;
+    } else {
+      p = body.appendParagraph(texte);
+      liste = null;
+    }
+    p.setHeading({ h1: PH.HEADING1, h2: PH.HEADING2, h3: PH.HEADING3 }[b.t] || PH.NORMAL);
+    if (b.t !== "li") p.setIndentStart(0).setIndentEnd(0).setIndentFirstLine(0);
+    var al = AL.JUSTIFY;
+    if (b.t === "h1" || b.t === "h2" || b.t === "h3" || b.t === "n" || b.t === "li") al = AL.LEFT;
+    if (b.c || b.t === "q" || b.t === "sig") al = AL.CENTER;
+    p.setAlignment(al);
+    var tx = p.editAsText(), fin = texte.length - 1;
+    if (b.t === "q") { p.setIndentStart(28).setIndentEnd(28).setSpacingBefore(6).setSpacingAfter(6); tx.setItalic(0, fin, true); }
+    if (b.t === "sig") { p.setSpacingAfter(18); tx.setItalic(0, fin, true); }
+    if (b.t === "n") { tx.setItalic(0, fin, true).setFontSize(0, fin, 9).setForegroundColor(0, fin, "#808080"); }
+    var pos = 0;
+    runs.forEach(function (r) {
+      var L = r[0].length;
+      if (!L) return;
+      if (r[1].indexOf("b") >= 0) tx.setBold(pos, pos + L - 1, true);
+      if (r[1].indexOf("i") >= 0) tx.setItalic(pos, pos + L - 1, true);
+      if (r[2] && /^https?:\/\//.test(r[2])) tx.setLinkUrl(pos, pos + L - 1, r[2]);
+      pos += L;
+    });
+  });
+  // body.clear() laisse un paragraphe vide au début : on l'enlève
+  if (body.getNumChildren() > 1) {
+    var premier = body.getChild(0);
+    if (premier.getType() === DocumentApp.ElementType.PARAGRAPH && !premier.asParagraph().getText()) premier.removeFromParent();
+  }
+}
+
+/** Le site envoie le texte corrigé : on réécrit le Doc, sauf s'il a changé entre-temps (CONFLIT). */
+function ecrireDoc_(sh, H, b, qui) {
+  if (!b.blocs || !b.blocs.length) throw new Error("Texte vide : rien n'a été enregistré.");
+  var o = ouvrirDoc_(sh, H, b.id), lu = blocsDuDoc_(o.doc);
+  if (lu.complexe) throw new Error("COMPLEXE");
+  if (!b.force && b.hash && empreinte_(lu.blocs) !== b.hash) throw new Error("CONFLIT");
+  try {
+    ecrireBlocs_(o.doc, b.blocs);
+    o.doc.saveAndClose();
+  } catch (err) {
+    // en cas de pépin, on remet le texte d'avant
+    try { var d = DocumentApp.openById(o.doc.getId()); ecrireBlocs_(d, lu.blocs); d.saveAndClose(); } catch (e2) { /* l'historique des versions du Doc le garde */ }
+    throw err;
+  }
+  var nouveau = blocsDuDoc_(DocumentApp.openById(idDuDoc_(o.url)));
+  var maintenant = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm");
+  sh.getRange(o.ligne, H.docModif + 1).setNumberFormat("@").setValue(maintenant);
+  sh.getRange(o.ligne, H.maj + 1).setNumberFormat("@").setValue(maintenant);
+  sh.getRange(o.ligne, H.majPar + 1).setValue(qui);
+  return { hash: empreinte_(nouveau.blocs), ligne: ligneObjet_(sh, H, o.ligne) };
 }
