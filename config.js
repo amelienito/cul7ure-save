@@ -8,5 +8,5 @@
            Tant que c'est vide, le site affiche l'instantané du 18/11/2026 (data/articles.js).
 */
 window.CUL7URE_CONFIG = {
-  script: ""
+  script: "https://script.google.com/macros/s/AKfycbwShKb7Hf5qHR6idBXafS4TX_cL_KK-jUPvClpsb-vMcKAPhMWXNBvS0f4TOnpm_E2XPw/exec"
 };
