@@ -1,32 +1,36 @@
 # Cul7ure · les archives
 
-Le tableau de bord pour trier, relire et préparer le livre des 247 articles de Cul7ure (2017-2023), récupérés depuis la Wayback Machine après la fermeture du site.
+Le tableau de bord de Florian et Amélien pour relire les 247 articles de Cul7ure sauvés de la Wayback Machine, et choisir ceux qui iront dans le livre.
 
-**[Ouvrir le tableau de bord](https://amelienito.github.io/cul7ure-save/)**
+**Le site :** https://amelienito.github.io/cul7ure-save
 
-On y trouve les chiffres clés, l'avancement de la relecture (Florian / Amélien), les articles à traiter (interviews vidéo à retranscrire, plumes à retrouver, articles introuvables…), les publications dans le temps, les rubriques, les plumes, les artistes les plus cités et la liste complète des articles, avec un extrait et des liens pour chacun. Chaque filtre se retrouve dans l'adresse de la page : on peut s'envoyer une vue précise.
+## Comment on s'en sert
 
-## Brancher le Google Sheet de suivi
+- **Mon espace** (en haut) : ta liste de relecture. « Ouvrir le Doc » ouvre le bon Google Doc et le passe « en cours ». Quand tu reviens sur le site, une barre te demande si c'est relu, et propose le suivant.
+- **Le tri rapide** : une carte par article, et trois boutons (Non, Peut-être, Oui). On peut aussi glisser la carte, ou utiliser les flèches du clavier. Chacun vote de son côté.
+- **Le livre** : un article y entre quand vous votez oui tous les deux. Les désaccords vont dans « À discuter ». Le sommaire suit l'ordre de parution, avec une estimation des pages.
+- **Les articles** : la liste complète, filtrable. Un clic sur un article permet d'ouvrir son Doc, de changer le statut de la relecture ou le relecteur, de voter, d'écrire une note, de régler une alerte ou de donner une plume aux articles non signés.
 
-Le site lit le Sheet à chaque visite : ce que vous y cochez apparaît dans le tableau de bord.
+La relecture est **croisée** : Florian relit les textes d'Amélien, Amélien ceux de Florian, et les autres plumes sont partagées à nombre de mots égal (environ 167 000 mots chacun). Une plume entière va à la même personne. La répartition se change article par article.
 
-1. Dans le Google Sheet : **Fichier → Partager → Publier sur le Web**.
-2. Choisir l'onglet du suivi et **Valeurs séparées par des virgules (.csv)**, puis **Publier**.
-3. Copier l'adresse obtenue dans `config.js` (ligne `sheetCsv`), sur GitHub : bouton crayon, coller, « Commit changes ».
+## Brancher le site sur le Sheet (une fois, sur ordinateur)
 
-Le bouton « Brancher le Sheet » du site fait la même chose, mais seulement dans le navigateur où on le règle.
+Tout est expliqué sur le site : **Réglages → Installer le script**. En résumé :
 
-Le site reconnaît ces colonnes par leur nom : Date, Rubrique, Auteur/Autrice, Titre, Mots, Alertes, Relu par Florian, Relu par Amélien, Source (archive). Il reconnaît aussi trois colonnes facultatives :
+1. Copier `outils/script-google.gs` dans un nouveau projet sur [script.google.com](https://script.google.com).
+2. Lancer la fonction `installer` et accepter les autorisations. Elle crée le Sheet « Cul7ure · Suivi des archives » dans le dossier Drive « Cul7ure - Archives », retrouve le lien de chaque Doc et affiche un **code d'accès**.
+3. Déployer en **Application Web** (Exécuter en tant que : Moi · Qui a accès : Tout le monde).
+4. Sur le site : Réglages → coller l'URL de l'application Web et le code.
+5. Réglages → **Inviter l'autre** : copie un lien qui branche le site d'un coup pour l'autre.
 
-- **Livre** (oui / non / peut-être) : ajoute le suivi du tri pour le livre et les filtres correspondants ;
-- **Lien Google Doc** (l'adresse du doc) : ajoute un bouton « Ouvrir le Google Doc » ;
-- **Notes** : s'affiche sous l'extrait de l'article.
+Pour éviter de recoller l'URL à chaque fois, on peut la mettre dans `config.js` (champ `script`). Le code d'accès, lui, ne va jamais dans le dépôt : il est public.
 
-Les cases à cocher valent TRUE ou FALSE ; « oui », « x » ou « fait » marchent aussi.
+Le Sheet reste utilisable à la main (menus déroulants, couleurs, filtres). Le site le relit toutes les trois minutes et à chaque retour sur l'onglet.
 
-## Les fichiers
+## Le dossier `outils/`
 
-- `index.html`, `app.js` : le site (aucune installation, aucune bibliothèque)
-- `config.js` : l'adresse du Google Sheet
-- `data/articles.js` : l'instantané du 18/11/2026 (titres, extraits, noms cités), utilisé tant que le Sheet n'est pas branché et pour compléter ce qu'il ne contient pas
-- `outils/` : les deux scripts qui ont servi à récupérer les articles (`cul7ure_recup.py`) et à en faire un document Word par article (`cul7ure_extraire.py`)
+- `script-google.gs` : le script Google qui crée le Sheet, retrouve les liens des Docs (toutes les heures) et permet au site de lire et d'écrire.
+- `cul7ure_recup.py` : l'inventaire et le téléchargement des captures de la Wayback Machine.
+- `cul7ure_extraire.py` : la transformation des pages en documents Word (un par article) et le fichier de suivi.
+
+`data/articles.js` contient l'instantané du 18/11/2026 : titres, dates, plumes, extraits, noms cités, alertes et la répartition de la relecture. Le site l'affiche tant qu'il n'est pas branché.

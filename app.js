@@ -1,6 +1,6 @@
 /* Cul7ure · tableau de bord des archives
-   Données : data/articles.js (instantané) + le Google Sheet de suivi publié en CSV (config.js).
-   Le Sheet a le dernier mot : ce qui y est coché ou corrigé remplace l'instantané. */
+   Données : data/articles.js (instantané + répartition de la relecture), puis le Google Sheet de suivi
+   via le script Google (outils/script-google.gs) qui sait aussi écrire : le Sheet a le dernier mot. */
 (function () {
   "use strict";
 
@@ -13,7 +13,8 @@
     { k: "Portraits", hex: "#d55181" }
   ];
   var AUTRE = { k: "Autres", hex: "#6f6c99" };
-  var MOTS_PAR_PAGE = 320;
+  var QUI = ["Florian", "Amélien"];
+  var MOTS_PAR_PAGE = 320, MOTS_PAR_MIN = 250, PAGE = 30;
   var TAGS = {
     introuvable: { one: "Introuvable dans l’archive", lab: "Introuvables dans l’archive", ds: "Cités par d’autres articles mais jamais archivés : piste BnF", st: "critical", o: 0 },
     spam: { one: "Spam possible", lab: "Spam possible", ds: "Des mots de casino traînent dans le texte", st: "critical", o: 1 },
@@ -25,19 +26,15 @@
     guillemets: { one: "Guillemets à vérifier", lab: "Guillemets à vérifier", ds: "Guillemets droits en nombre impair", st: "info", o: 7 },
     autre: { one: "Remarque dans le Sheet", lab: "Autres remarques", ds: "Voir la colonne Alertes du Sheet", st: "info", o: 8 }
   };
-  var STATUTS = [
-    ["", "Tous les statuts"],
-    ["aRelire", "Pas encore relus à deux"],
-    ["aRelireF", "À relire par Florian"],
-    ["aRelireA", "À relire par Amélien"],
-    ["relus", "Relus par vous deux"]
-  ];
-  var LIVRE_STATUTS = [
-    ["livreOui", "Livre : oui"],
-    ["livrePeut", "Livre : peut-être"],
-    ["livreNon", "Livre : non"],
-    ["livreVide", "Livre : pas encore décidé"]
-  ];
+  var ST_LAB = { "": "À relire", cours: "En cours", relu: "Relu" };
+  var LV_LAB = { "": "pas voté", oui: "oui", peut: "peut-être", non: "non" };
+  var LV_SYM = { "": "·", oui: "✓", peut: "?", non: "✕" };
+  var LIVRE = {
+    dedans: { lab: "Dans le livre", cls: "c-in", r: 0 },
+    discuter: { lab: "À discuter", cls: "c-disc", r: 1 },
+    attente: { lab: "Votes en attente", cls: "c-wait", r: 2 },
+    ecarte: { lab: "Écartés", cls: "c-out", r: 3 }
+  };
 
   var nf = new Intl.NumberFormat("fr-FR");
   var nfc = new Intl.NumberFormat("fr-FR", { notation: "compact", maximumFractionDigits: 1 });
@@ -78,6 +75,7 @@
     return AUTRE;
   }
   function pct(a, b) { return b ? Math.round(a / b * 100) : 0; }
+  function plur(n, one, many) { return nf.format(n) + " " + (n > 1 ? (many || one + "s") : one); }
   function dateFr(d) {
     if (!d) return "—";
     var p = d.split("-");
@@ -88,9 +86,31 @@
     var p = d.split("-");
     return MOIS[+p[1] - 1] + " " + p[0];
   }
+  function pad(n) { return ("0" + n).slice(-2); }
+  function nowStr() { var d = new Date(); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + " " + pad(d.getHours()) + ":" + pad(d.getMinutes()); }
+  function hhmm() { var d = new Date(); return pad(d.getHours()) + ":" + pad(d.getMinutes()); }
+  function parseStamp(t) {
+    var m = String(t || "").match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/);
+    return m ? new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0)) : null;
+  }
+  function relTime(t) {
+    var d = parseStamp(t);
+    if (!d) return "";
+    var min = Math.round((Date.now() - d.getTime()) / 60000);
+    if (min < 2) return "à l’instant";
+    if (min < 60) return "il y a " + min + " min";
+    if (min < 60 * 20) return "il y a " + Math.round(min / 60) + " h";
+    var days = Math.round(min / 1440);
+    if (days <= 1) return "hier";
+    if (days < 7) return "il y a " + days + " jours";
+    return "le " + pad(d.getDate()) + "/" + pad(d.getMonth() + 1);
+  }
+  function minLecture(a) { return Math.max(1, Math.round((a.mots || 0) / MOTS_PAR_MIN)); }
+  function pages(mots) { return Math.max(1, Math.round((mots || 0) / MOTS_PAR_PAGE)); }
+
   function icon(st, size) {
     size = size || 20;
-    var col = { critical: "#d03b3b", serious: "#ec835a", warn: "#fab219", info: "#9396C9", good: "#0ca30c" }[st];
+    var col = { critical: "#d03b3b", serious: "#ec835a", warn: "#fab219", info: "#A8ABDC", good: "#0ca30c", cours: "#C6B6FF", todo: "#6C6FA6" }[st];
     var svg = s("svg", { viewBox: "0 0 20 20", width: size, height: size, class: "ic", "aria-hidden": "true" });
     if (st === "critical") {
       svg.appendChild(s("path", { d: "M6.6 2h6.8L18 6.6v6.8L13.4 18H6.6L2 13.4V6.6z", fill: col }));
@@ -104,184 +124,368 @@
     } else if (st === "good") {
       svg.appendChild(s("circle", { cx: 10, cy: 10, r: 8.2, fill: col }));
       svg.appendChild(s("path", { d: "M6.2 10.2l2.5 2.5 5.1-5.3", stroke: "#fff", "stroke-width": "2", fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round" }));
+    } else if (st === "cours") {
+      svg.appendChild(s("circle", { cx: 10, cy: 10, r: 7.4, fill: "none", stroke: col, "stroke-width": "1.8" }));
+      svg.appendChild(s("path", { d: "M10 2.6a7.4 7.4 0 0 1 0 14.8z", fill: col }));
+    } else if (st === "todo") {
+      svg.appendChild(s("circle", { cx: 10, cy: 10, r: 7.4, fill: "none", stroke: col, "stroke-width": "1.8", "stroke-dasharray": "3 2.4" }));
     } else {
       svg.appendChild(s("circle", { cx: 10, cy: 10, r: 7.6, fill: "none", stroke: col, "stroke-width": "1.6" }));
       svg.appendChild(s("path", { d: "M10 9v5M10 6.1v.1", stroke: col, "stroke-width": "1.9", "stroke-linecap": "round" }));
     }
     return svg;
   }
-  var ICON_LINK = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M9 3h4v4M13 3L7.5 8.5M11 9.5V13H3V5h3.5"/></svg>';
   function svgFrom(str) { var t = document.createElement("template"); t.innerHTML = str; return t.content.firstChild; }
+  var I_LINK = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M9 3h4v4M13 3L7.5 8.5M11 9.5V13H3V5h3.5"/></svg>';
+  var I_CHECK = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.3l2.2 2.2 4.8-5"/></svg>';
+  function iLink() { return svgFrom(I_LINK); }
+  function iCheck() { return svgFrom(I_CHECK); }
 
   // ------------------------------------------------------------------ données
+  function tagOf(raw, a) {
+    var l = fold(raw);
+    if (l.indexOf("introuvable") >= 0) return "introuvable";
+    if (l.indexOf("spam") >= 0) return "spam";
+    if (l.indexOf("tres court") >= 0) return a.vid > 0 ? "video" : "court";
+    if (l.indexOf("auteur") >= 0 || l.indexOf("plume") >= 0) return "auteur";
+    if (l.indexOf("date") >= 0) return "date";
+    if (l.indexOf("ancienne") >= 0 || l.indexOf("2020") >= 0) return "v2020";
+    if (l.indexOf("guillemet") >= 0) return "guillemets";
+    return "autre";
+  }
   function classify(a) {
     var tags = [];
-    (a.alertes || []).forEach(function (raw) {
-      var l = fold(raw), t;
-      if (l.indexOf("introuvable") >= 0) t = "introuvable";
-      else if (l.indexOf("spam") >= 0) t = "spam";
-      else if (l.indexOf("tres court") >= 0) t = a.vid > 0 ? "video" : "court";
-      else if (l.indexOf("auteur") >= 0) t = "auteur";
-      else if (l.indexOf("date") >= 0) t = "date";
-      else if (l.indexOf("ancienne") >= 0 || l.indexOf("2020") >= 0) t = "v2020";
-      else if (l.indexOf("guillemet") >= 0) t = "guillemets";
-      else t = "autre";
-      if (tags.indexOf(t) < 0) tags.push(t);
-    });
+    (a.alertes || []).forEach(function (raw) { var t = tagOf(raw, a); if (tags.indexOf(t) < 0) tags.push(t); });
     if (!a.manquant && !a.auteur && tags.indexOf("auteur") < 0) tags.push("auteur");
     tags.sort(function (x, y) { return TAGS[x].o - TAGS[y].o; });
     return tags;
   }
+  function consensus(a) {
+    if (a.manquant) return "";
+    if (a.livreF === "oui" && a.livreA === "oui") return "dedans";
+    if (a.livreF === "non" && a.livreA === "non") return "ecarte";
+    if (a.livreF && a.livreA) return "discuter";
+    return "attente";
+  }
   function prepare(a) {
+    a.rel = a.rel || ""; a.statut = a.statut || ""; a.reluLe = a.reluLe || "";
+    a.livreF = a.livreF || ""; a.livreA = a.livreA || ""; a.notes = a.notes || "";
+    a.alertes = a.alertes || [];
     a.annee = a.date ? a.date.slice(0, 4) : "";
     a.trim = a.date ? a.annee + "-T" + (Math.floor((+a.date.slice(5, 7) - 1) / 3) + 1) : "";
     a.rubK = rubOf(a.rub).k;
     a.tags = classify(a);
-    a.relF = !!a.relF; a.relA = !!a.relA;
+    a.livre = consensus(a);
     a._q = fold([a.titre, a.auteur, a.rub, (a.noms || []).join(" "), a.extrait, a.notes].join(" "));
     return a;
   }
   var SNAP = (window.CUL7URE_DATA && window.CUL7URE_DATA.articles) || [];
-  var ALL = SNAP.map(function (a) { return prepare(Object.assign({}, a)); });
-  var HAS_LIVRE = false;
+  var SNAP_BY = {};
+  SNAP.forEach(function (a) { SNAP_BY[a.id] = a; });
+  function fromSnap() { return SNAP.map(function (a) { return prepare(Object.assign({}, a)); }); }
+  var ALL = fromSnap();
+  function byId(id) { for (var i = 0; i < ALL.length; i++) if (ALL[i].id === id) return ALL[i]; return null; }
 
-  // ------------------------------------------------------------------ lecture du Google Sheet
-  function parseCSV(text) {
-    var rows = [], row = [], f = "", q = false, i, c;
-    text = text.replace(/^﻿/, "");
-    for (i = 0; i < text.length; i++) {
-      c = text[i];
-      if (q) {
-        if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; }
-        else f += c;
-      } else if (c === '"') q = true;
-      else if (c === ",") { row.push(f); f = ""; }
-      else if (c === "\n" || c === "\r") {
-        if (c === "\r" && text[i + 1] === "\n") i++;
-        row.push(f); rows.push(row); row = []; f = "";
-      } else f += c;
+  function stIn(v) { v = fold(v); return v.indexOf("relu") === 0 ? "relu" : v.indexOf("cours") >= 0 ? "cours" : ""; }
+  function lvIn(v) { v = fold(v).trim(); return v === "oui" ? "oui" : v.indexOf("peut") === 0 ? "peut" : v === "non" ? "non" : ""; }
+  function applyRow(a, r) {
+    a.id = r.id;
+    if (r.date) {
+      var m = String(r.date).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      a.date = /^\d{4}-\d{2}-\d{2}$/.test(r.date) ? r.date : m ? m[3] + "-" + pad(m[2]) + "-" + pad(m[1]) : a.date;
     }
-    if (f || row.length) { row.push(f); rows.push(row); }
-    return rows;
+    if (r.rub) a.rub = r.rub;
+    if (r.titre) a.titre = r.titre;
+    a.auteur = r.auteur || "";
+    if (r.mots) a.mots = +r.mots || a.mots;
+    a.rel = QUI.indexOf(r.rel) >= 0 ? r.rel : "";
+    a.statut = stIn(r.statut); a.reluLe = r.reluLe || "";
+    a.livreF = lvIn(r.livreF); a.livreA = lvIn(r.livreA);
+    a.notes = r.notes || "";
+    a.alertes = String(r.alertes || "").split(/\s*;\s*/).filter(Boolean);
+    a.gdoc = /^https?:\/\//.test(r.gdoc || "") ? r.gdoc : "";
+    a.docModif = r.docModif || "";
+    if (r.src) a.src = r.src;
+    if (r.doc) a.doc = r.doc;
+    a.maj = r.maj || ""; a.majPar = r.majPar || "";
+    if (a.manquant == null) a.manquant = a.alertes.some(function (x) { return fold(x).indexOf("introuvable") >= 0; });
+    return a;
   }
-  function vrai(v) { return /^(true|vrai|oui|x|✓|✔|✅|1|ok|fait|yes|relu)$/i.test(String(v || "").trim()); }
-  function cleSrc(src) {
-    var m = String(src || "").match(/cul7ure\.fr\/(.+?)\/?(?:[?#].*)?$/);
-    return m ? m[1].replace(/^\/+|\/+$/g, "") : "";
-  }
-  function fromSheet(rows) {
-    var hi = -1, i;
-    for (i = 0; i < Math.min(rows.length, 10); i++) {
-      if (rows[i].some(function (c) { return fold(c).indexOf("titre") >= 0; })) { hi = i; break; }
-    }
-    if (hi < 0) throw new Error("Pas de colonne « Titre » dans le Sheet.");
-    var H = rows[hi].map(function (c) { return fold(c).trim(); });
-    function col(test) { for (var j = 0; j < H.length; j++) if (H[j] && test(H[j])) return j; return -1; }
-    var C = {
-      date: col(function (x) { return x === "date" || x.indexOf("date") === 0; }),
-      rub: col(function (x) { return x.indexOf("rubrique") >= 0; }),
-      auteur: col(function (x) { return x.indexOf("auteur") >= 0 || x.indexOf("plume") >= 0 || x.indexOf("autrice") >= 0; }),
-      titre: col(function (x) { return x.indexOf("titre") >= 0; }),
-      mots: col(function (x) { return x === "mots" || x.indexOf("mots") === 0; }),
-      alertes: col(function (x) { return x.indexOf("alerte") >= 0; }),
-      relF: col(function (x) { return x.indexOf("florian") >= 0; }),
-      relA: col(function (x) { return x.indexOf("amelien") >= 0; }),
-      src: col(function (x) { return x.indexOf("source") >= 0 || x.indexOf("archive") >= 0; }),
-      notes: col(function (x) { return x.indexOf("note") >= 0 || x.indexOf("remarque") >= 0 || x.indexOf("commentaire") >= 0; }),
-      livre: col(function (x) { return x.indexOf("livre") >= 0; })
-    };
-    var body = rows.slice(hi + 1).filter(function (r) { return C.titre >= 0 && String(r[C.titre] || "").trim(); });
-    // colonne de lien Google Doc : un en-tête avec « doc » ou « lien » dont les cellules sont des adresses
-    C.gdoc = -1;
-    H.forEach(function (x, j) {
-      if (C.gdoc >= 0 || j === C.src) return;
-      if (x.indexOf("doc") >= 0 || x.indexOf("lien") >= 0 || x.indexOf("drive") >= 0) {
-        if (body.some(function (r) { return /^https?:\/\//.test(String(r[j] || "").trim()); })) C.gdoc = j;
-      }
+  function mergeRemote(rows) {
+    var seen = {}, out = [];
+    rows.forEach(function (r) {
+      if (!r.id || seen[r.id]) return;
+      seen[r.id] = true;
+      out.push(prepare(applyRow(Object.assign({}, SNAP_BY[r.id] || {}), r)));
     });
-    var byId = {}, byT = {};
-    SNAP.forEach(function (a) { if (a.id) byId[a.id] = a; byT[fold(a.titre).replace(/[^a-z0-9]/g, "")] = a; });
-    var get = function (r, k) { return C[k] >= 0 ? String(r[C[k]] || "").trim() : ""; };
-    var livreVu = false;
-    var out = body.map(function (r) {
-      var key = cleSrc(get(r, "src"));
-      var base = byId[key] || byT[fold(get(r, "titre")).replace(/[^a-z0-9]/g, "")] || {};
-      var a = Object.assign({}, base);
-      a.id = a.id || key || get(r, "titre");
-      if (C.date >= 0) a.date = get(r, "date") || a.date || "";
-      if (C.rub >= 0) a.rub = get(r, "rub") || a.rub || "";
-      if (C.auteur >= 0) a.auteur = get(r, "auteur");
-      a.titre = get(r, "titre");
-      if (C.mots >= 0) a.mots = parseInt(get(r, "mots").replace(/\D/g, ""), 10) || a.mots || 0;
-      if (C.alertes >= 0) a.alertes = get(r, "alertes").split(/\s*;\s*/).filter(Boolean);
-      if (C.src >= 0 && get(r, "src")) a.src = get(r, "src");
-      a.relF = vrai(get(r, "relF")); a.relA = vrai(get(r, "relA"));
-      a.gdoc = C.gdoc >= 0 ? String(r[C.gdoc] || "").trim() : "";
-      a.notes = get(r, "notes");
-      if (C.livre >= 0) {
-        livreVu = true;
-        var l = fold(get(r, "livre"));
-        a.livre = !l ? "" : (l.indexOf("peut") >= 0 || l.indexOf("?") >= 0) ? "peut" : (/^(non|no|x non|false|faux)$/.test(l) ? "non" : (vrai(l) || l.indexOf("oui") >= 0 ? "oui" : "peut"));
-      }
-      if (base.manquant == null) a.manquant = (a.alertes || []).some(function (x) { return fold(x).indexOf("introuvable") >= 0; });
-      // le Sheet a été corrigé ? on ne garde la date que si elle a la forme AAAA-MM-JJ
-      if (a.date && !/^\d{4}-\d{2}-\d{2}$/.test(a.date)) {
-        var m = a.date.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-        a.date = m ? m[3] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[1]).slice(-2) : "";
-      }
-      return prepare(a);
-    });
-    if (!out.length) throw new Error("Le Sheet ne contient aucun article.");
-    HAS_LIVRE = livreVu;
+    SNAP.forEach(function (a) { if (!seen[a.id]) out.push(prepare(Object.assign({}, a))); });
+    out.sort(function (x, y) { return (x.date || "9999") < (y.date || "9999") ? -1 : (x.date || "9999") > (y.date || "9999") ? 1 : 0; });
     return out;
   }
+  function toSheet(ch) {
+    var o = {};
+    Object.keys(ch).forEach(function (k) {
+      var v = ch[k];
+      if (k === "statut") v = { "": "", cours: "en cours", relu: "relu" }[v] || "";
+      else if (k === "livreF" || k === "livreA") v = { "": "", oui: "oui", peut: "peut-être", non: "non" }[v] || "";
+      else if (k === "alertes") v = (v || []).join(" ; ");
+      o[k] = v;
+    });
+    return o;
+  }
 
-  var cfg = Object.assign({ sheetCsv: "", sheetEdit: "" }, window.CUL7URE_CONFIG || {});
-  try {
-    var ls = localStorage.getItem("cul7ure.sheetCsv"), le = localStorage.getItem("cul7ure.sheetEdit");
-    if (ls) cfg.sheetCsv = ls;
-    if (le) cfg.sheetEdit = le;
-  } catch (e) { /* stockage indisponible : on garde config.js */ }
+  // ------------------------------------------------------------------ réglages locaux
+  function ls(k, v) {
+    try {
+      if (v === undefined) return localStorage.getItem("cul7ure." + k);
+      if (v === null) localStorage.removeItem("cul7ure." + k); else localStorage.setItem("cul7ure." + k, v);
+    } catch (e) { /* stockage indisponible */ }
+    return null;
+  }
+  var CONF = window.CUL7URE_CONFIG || {};
+  var cfg = { script: ls("script") || CONF.script || "", code: ls("code") || "", qui: ls("qui") || "" };
+  if (QUI.indexOf(cfg.qui) < 0) cfg.qui = "";
+  var REMOTE = {};
   var lastLoad = 0;
 
-  function setSync(state, txt) {
-    $("syncDot").className = "dot" + (state === "on" ? " on" : state === "err" ? " err" : "");
-    $("syncTxt").textContent = txt;
-    $("refresh").hidden = !cfg.sheetCsv;
-    var open = $("openSheet");
-    open.hidden = !cfg.sheetEdit;
-    if (cfg.sheetEdit) open.href = cfg.sheetEdit;
-    $("settings").lastChild.textContent = cfg.sheetCsv ? "Réglages" : "Brancher le Sheet";
+  // lien d'invitation : #cle=…&script=…&qui=…
+  function invitation() {
+    var p = new URLSearchParams(location.hash.slice(1));
+    if (!p.get("cle")) return false;
+    cfg.code = p.get("cle").trim().toLowerCase(); ls("code", cfg.code);
+    if (p.get("script")) { cfg.script = p.get("script"); ls("script", cfg.script); }
+    if (QUI.indexOf(p.get("qui")) >= 0) { cfg.qui = p.get("qui"); ls("qui", cfg.qui); }
+    history.replaceState(null, "", location.pathname + location.search);
+    setTimeout(function () { toast(cfg.qui ? "C’est branché. Salut " + cfg.qui + " !" : "C’est branché."); }, 600);
+    return true;
   }
-  function loadSheet() {
-    if (!cfg.sheetCsv) { setSync("", "Instantané du 18/11/2026"); return Promise.resolve(); }
-    $("grid").classList.add("loading");
-    setSync("", "Lecture du Google Sheet…");
-    var url = cfg.sheetCsv + (cfg.sheetCsv.indexOf("?") >= 0 ? "&" : "?") + "_=" + Date.now();
-    return fetch(url, { cache: "no-store" })
-      .then(function (r) { if (!r.ok) throw new Error("Le Sheet répond " + r.status); return r.text(); })
-      .then(function (t) {
-        if (/^\s*</.test(t)) throw new Error("L’adresse ne renvoie pas un CSV : vérifie « Publier sur le Web » au format .csv.");
-        ALL = fromSheet(parseCSV(t));
-        lastLoad = Date.now();
-        var d = new Date();
-        setSync("on", "Google Sheet · " + ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2));
-      })
-      .catch(function (e) {
-        setSync("err", "Sheet injoignable · instantané affiché");
-        console.warn("Cul7ure :", e);
-        throw e;
-      })
-      .finally(function () { $("grid").classList.remove("loading"); render(); });
+  invitation();
+
+  function other(q) { return q === "Florian" ? "Amélien" : "Florian"; }
+  function myKey() { return cfg.qui === "Florian" ? "livreF" : cfg.qui === "Amélien" ? "livreA" : ""; }
+
+  // ------------------------------------------------------------------ le script Google
+  var API = {
+    on: function () { return !!(cfg.script && cfg.code); },
+    check: function (r) {
+      return r.text().then(function (t) {
+        var d;
+        try { d = JSON.parse(t); } catch (e) { throw new Error("Le script ne renvoie pas les données. Vérifie que « Qui a accès » est sur « Tout le monde ».") ; }
+        if (!d.ok) {
+          var er = new Error(d.erreur === "CODE_FAUX" ? "Code d’accès refusé." : d.erreur || "Erreur du script");
+          er.code = d.erreur === "CODE_FAUX";
+          throw er;
+        }
+        return d;
+      });
+    },
+    net: function (e) {
+      if (e && e.name === "TypeError") throw new Error("Impossible de joindre le script. Vérifie l’adresse et ta connexion.");
+      throw e;
+    },
+    get: function (action) {
+      var q = new URLSearchParams({ code: cfg.code, _: Date.now() });
+      if (action) q.set("action", action);
+      return fetch(cfg.script + "?" + q.toString(), { cache: "no-store" }).then(API.check, API.net);
+    },
+    post: function (modifs, keep) {
+      return fetch(cfg.script, { method: "POST", body: JSON.stringify({ code: cfg.code, qui: cfg.qui, modifs: modifs }), keepalive: !!keep })
+        .then(API.check, API.net);
+    }
+  };
+
+  function setSync(state, txt) {
+    $("syncDot").className = "dot" + (state ? " " + state : "");
+    $("syncTxt").textContent = txt;
+    $("refresh").hidden = !API.on();
+    var w = $("whoBtn");
+    w.textContent = cfg.qui || "Qui es-tu ?";
+    w.classList.toggle("on", !!cfg.qui);
+    w.title = cfg.qui ? "Changer de personne" : "";
+    $("settings").querySelector("span").textContent = API.on() ? "Réglages" : "Brancher le Sheet";
+  }
+
+  var W = { pending: {}, before: {}, timer: 0, busy: false };
+  function hasPending() { return W.busy || Object.keys(W.pending).length > 0; }
+
+  function load(action) {
+    if (!API.on()) { setSync("", "Instantané du 18/11/2026"); return Promise.resolve(null); }
+    if (hasPending() && !action) { setTimeout(function () { load(); }, 1500); return Promise.resolve(null); }
+    setSync("busy", action === "liens" ? "Recherche des Docs…" : "Lecture du Sheet…");
+    if (!lastLoad) $("grid").classList.add("loading");
+    return API.get(action).then(function (d) {
+      ALL = mergeRemote(d.articles || []);
+      REMOTE = { sheet: d.sheet || "", liensMaj: d.liensMaj || "", liens: d.liens || REMOTE.liens };
+      lastLoad = Date.now();
+      setSync("on", "Sheet · " + hhmm());
+      checkRetour();
+      safeRender();
+      return d;
+    }).catch(function (e) {
+      setSync("err", e.code ? "Code d’accès refusé" : "Script injoignable · instantané");
+      console.warn("Cul7ure :", e);
+      throw e;
+    }).finally(function () { $("grid").classList.remove("loading"); });
+  }
+
+  // ------------------------------------------------------------------ enregistrer (optimiste, par paquets)
+  function needConnect() {
+    toast("Pour enregistrer, branche d’abord le site sur le Sheet.", { action: { label: "Brancher", fn: openSettings } });
+  }
+  function save(a, champs, opt) {
+    opt = opt || {};
+    if (!API.on()) { needConnect(); return false; }
+    if (!cfg.qui) { askWho(function () { save(a, champs, opt); }); return false; }
+    var p = W.pending[a.id] || (W.pending[a.id] = {});
+    var b = W.before[a.id] || (W.before[a.id] = {});
+    Object.keys(champs).forEach(function (k) {
+      if (!(k in b)) b[k] = a[k];
+      p[k] = champs[k];
+      a[k] = champs[k];
+    });
+    if ("statut" in champs) {
+      if (!("reluLe" in b)) b.reluLe = a.reluLe;
+      a.reluLe = champs.statut === "relu" ? nowStr() : "";
+    }
+    a.maj = nowStr(); a.majPar = cfg.qui;
+    prepare(a);
+    if (!opt.noRender) safeRender();
+    if (opt.msg) toast(opt.msg, opt.undo ? { action: { label: "Annuler", fn: opt.undo } } : null);
+    clearTimeout(W.timer);
+    W.timer = setTimeout(flush, opt.now ? 0 : 650);
+    return true;
+  }
+  function flush(keep) {
+    clearTimeout(W.timer);
+    if (W.busy) { W.timer = setTimeout(flush, 400); return; }
+    var ids = Object.keys(W.pending);
+    if (!ids.length) return;
+    var sent = W.pending, befores = W.before;
+    W.pending = {}; W.before = {}; W.busy = true;
+    setSync("busy", "Enregistrement…");
+    API.post(ids.map(function (id) { return { id: id, champs: toSheet(sent[id]) }; }), keep).then(function (d) {
+      (d.lignes || []).forEach(function (r) {
+        var a = byId(r.id);
+        if (!a) return;
+        applyRow(a, r);
+        var p = W.pending[r.id];
+        if (p) Object.keys(p).forEach(function (k) { a[k] = p[k]; });
+        prepare(a);
+      });
+      setSync("on", "Enregistré · " + hhmm());
+    }).catch(function (e) {
+      if (keep) { setSync("err", "À vérifier"); lastLoad = 0; return; } // page en arrière-plan : on relira le Sheet au retour
+      Object.keys(befores).forEach(function (id) {
+        var a = byId(id);
+        if (!a) return;
+        Object.keys(befores[id]).forEach(function (k) { if (!(W.pending[id] && k in W.pending[id])) a[k] = befores[id][k]; });
+        prepare(a);
+      });
+      setSync("err", e.code ? "Code d’accès refusé" : "Pas enregistré");
+      toast("Pas enregistré : " + e.message, { err: true, ms: 9000, action: { label: "Réessayer", fn: function () {
+        Object.keys(sent).forEach(function (id) { var a = byId(id); if (a) save(a, sent[id], { now: true, noRender: true }); });
+        safeRender();
+      } } });
+    }).finally(function () { W.busy = false; safeRender(); });
+  }
+
+  // ------------------------------------------------------------------ petits messages
+  var toastT;
+  function toast(msg, o) {
+    o = o || {};
+    var t = clear($("toast"));
+    t.className = "toast on" + (o.err ? " err" : "");
+    t.appendChild(h("span", { text: msg }));
+    if (o.action) t.appendChild(h("button", { type: "button", text: o.action.label, onclick: function () { t.classList.remove("on"); o.action.fn(); } }));
+    clearTimeout(toastT);
+    toastT = setTimeout(function () { t.classList.remove("on"); }, o.ms || (o.action ? 6000 : 2600));
+  }
+
+  // ------------------------------------------------------------------ retour d'un Doc
+  function getOuvert() { try { return JSON.parse(ls("ouvert") || "null"); } catch (e) { return null; } }
+  function setOuvert(o) { ls("ouvert", o ? JSON.stringify(o) : null); renderRetour(); }
+  function checkRetour() {
+    var o = getOuvert();
+    if (!o) return;
+    var a = byId(o.id);
+    if (!a || Date.now() - o.t > 12 * 3600 * 1000 || (a.statut === "relu" && !o.fini)) ls("ouvert", null);
+  }
+  function docHref(a) {
+    return a.gdoc || "https://drive.google.com/drive/search?q=" + encodeURIComponent('"' + (a.doc || a.titre).replace(/"/g, "") + '"');
+  }
+  function docLink(a, cls, label) {
+    return h("a", {
+      class: cls, href: docHref(a), target: "_blank", rel: "noopener",
+      title: a.gdoc ? "Ouvre le Google Doc" : "Cherche le Doc dans ton Google Drive",
+      onclick: function (e) { e.stopPropagation(); opened(a); }
+    }, iLink(), label || (a.gdoc ? "Ouvrir le Doc" : "Trouver dans Drive"));
+  }
+  function opened(a) {
+    if (!API.on() || !cfg.qui || a.manquant || (a.rel && a.rel !== cfg.qui)) return;
+    if (a.statut === "") save(a, { statut: "cours" }, { noRender: true });
+    setOuvert({ id: a.id, t: Date.now() });
+    safeRender();
+    flush();
+  }
+  function myQueue() {
+    if (!cfg.qui) return [];
+    return ALL.filter(function (a) { return !a.manquant && a.rel === cfg.qui && a.statut !== "relu"; })
+      .sort(function (x, y) {
+        if ((x.statut === "cours") !== (y.statut === "cours")) return x.statut === "cours" ? -1 : 1;
+        return (x.date || "9999") < (y.date || "9999") ? -1 : 1;
+      });
+  }
+  function voteSeg(a, compact) {
+    var k = myKey();
+    return h("div", { class: "seg", role: "group", "aria-label": "Ton vote pour le livre" },
+      [["oui", "Oui"], ["peut", "Peut-être"], ["non", "Non"]].map(function (o) {
+        var on = a[k] === o[0];
+        return h("button", { type: "button", "aria-pressed": on ? "true" : "false", onclick: function (e) {
+          e.stopPropagation();
+          var prev = a[k];
+          var ch = {}; ch[k] = on ? "" : o[0];
+          save(a, ch, { msg: on ? "Vote retiré" : "Vote : " + LV_LAB[o[0]], undo: function () { var u = {}; u[k] = prev; save(a, u); } });
+        } }, compact ? o[1] : o[1]);
+      }));
+  }
+  function renderRetour() {
+    var box = $("retour"), o = getOuvert(), a = o && byId(o.id);
+    if (!o || !a || !cfg.qui) { box.hidden = true; return; }
+    clear(box);
+    box.hidden = false;
+    box.appendChild(h("button", { class: "x", type: "button", "aria-label": "Fermer", text: "×", onclick: function () { setOuvert(null); } }));
+    var next = myQueue().filter(function (x) { return x.id !== a.id; })[0];
+    if (a.statut !== "relu") {
+      box.appendChild(h("div", { class: "q" }, "Tu reviens de ", h("b", { text: "« " + a.titre + " »" }), ". C’est relu ?"));
+      box.appendChild(h("div", { class: "r" },
+        h("button", { class: "btn main sm", type: "button", onclick: function () {
+          o.fini = true; ls("ouvert", JSON.stringify(o));
+          save(a, { statut: "relu" }, { msg: "Relu ✓", undo: function () { save(a, { statut: "cours" }); } });
+          renderRetour();
+        } }, iCheck(), "Oui, c’est relu"),
+        h("button", { class: "btn ghost sm", type: "button", text: "Pas encore", onclick: function () { setOuvert(null); toast("Il reste en cours dans ta liste."); } }),
+        docLink(a, "btn ghost sm", "Rouvrir le Doc")));
+    } else {
+      box.appendChild(h("div", { class: "q" }, h("b", { text: "« " + a.titre + " »" }), " est relu. ", next ? "La suite ?" : "C’était le dernier de ta liste !"));
+      box.appendChild(h("div", { class: "r" },
+        next ? h("a", { class: "btn main sm", href: docHref(next), target: "_blank", rel: "noopener", onclick: function () { opened(next); } }, iLink(), "Suivant : " + (next.titre.length > 34 ? next.titre.slice(0, 32) + "…" : next.titre)) : null,
+        h("button", { class: "btn ghost sm", type: "button", text: "Fermer", onclick: function () { setOuvert(null); } })));
+    }
+    if (myKey() && !a[myKey()] && API.on()) {
+      box.appendChild(h("div", { class: "r" }, h("span", { class: "lab", text: "Pour le livre :" }), voteSeg(a)));
+    }
   }
 
   // ------------------------------------------------------------------ filtres
-  var S = { q: "", rubs: [], auteur: "", annee: "", statut: "", alerte: "", nom: "", sort: "date", dir: 1, open: "" };
+  var STATUTS = [["", "Toute la relecture"], ["pasRelu", "Pas encore relus"], ["aRelire", "À relire"], ["cours", "En cours"], ["relu", "Relus"]];
+  var S = { q: "", rubs: [], auteur: "", annee: "", rel: "", statut: "", livre: "", alerte: "", nom: "", sort: "date", dir: 1, open: "", shown: PAGE, tocAll: false };
   function readHash() {
     var p = new URLSearchParams(location.hash.slice(1));
     S.q = p.get("q") || "";
     S.rubs = (p.get("r") || "").split(",").filter(Boolean);
-    S.auteur = p.get("a") || ""; S.annee = p.get("y") || ""; S.statut = p.get("s") || "";
+    S.auteur = p.get("a") || ""; S.annee = p.get("y") || "";
+    S.rel = QUI.indexOf(p.get("rel")) >= 0 ? p.get("rel") : "";
+    S.statut = p.get("s") || ""; S.livre = p.get("l") || "";
     S.alerte = p.get("al") || ""; S.nom = p.get("n") || "";
     if (p.get("tri")) { S.sort = p.get("tri").replace(/^-/, ""); S.dir = p.get("tri")[0] === "-" ? -1 : 1; }
   }
@@ -291,13 +495,16 @@
     if (S.rubs.length) p.set("r", S.rubs.join(","));
     if (S.auteur) p.set("a", S.auteur);
     if (S.annee) p.set("y", S.annee);
+    if (S.rel) p.set("rel", S.rel);
     if (S.statut) p.set("s", S.statut);
+    if (S.livre) p.set("l", S.livre);
     if (S.alerte) p.set("al", S.alerte);
     if (S.nom) p.set("n", S.nom);
     if (S.sort !== "date" || S.dir !== 1) p.set("tri", (S.dir < 0 ? "-" : "") + S.sort);
     var str = p.toString();
     history.replaceState(null, "", str ? "#" + str : location.pathname + location.search);
   }
+  function anyFilter() { return !!(S.q || S.rubs.length || S.auteur || S.annee || S.rel || S.statut || S.livre || S.alerte || S.nom); }
   function match(a, except) {
     if (except !== "q" && S.q) {
       var words = fold(S.q).split(/\s+/).filter(Boolean);
@@ -308,31 +515,37 @@
     if (except !== "annee" && S.annee && a.annee !== S.annee) return false;
     if (except !== "alerte" && S.alerte && a.tags.indexOf(S.alerte) < 0) return false;
     if (except !== "nom" && S.nom && (a.noms || []).indexOf(S.nom) < 0) return false;
+    if (except !== "rel" && S.rel && a.rel !== S.rel) return false;
     if (except !== "statut" && S.statut) {
       if (a.manquant) return false;
-      switch (S.statut) {
-        case "aRelire": if (a.relF && a.relA) return false; break;
-        case "aRelireF": if (a.relF) return false; break;
-        case "aRelireA": if (a.relA) return false; break;
-        case "relus": if (!(a.relF && a.relA)) return false; break;
-        case "livreOui": if (a.livre !== "oui") return false; break;
-        case "livrePeut": if (a.livre !== "peut") return false; break;
-        case "livreNon": if (a.livre !== "non") return false; break;
-        case "livreVide": if (a.livre) return false; break;
-      }
+      if (S.statut === "pasRelu" && a.statut === "relu") return false;
+      if (S.statut === "aRelire" && a.statut !== "") return false;
+      if (S.statut === "cours" && a.statut !== "cours") return false;
+      if (S.statut === "relu" && a.statut !== "relu") return false;
+    }
+    if (except !== "livre" && S.livre) {
+      if (a.manquant) return false;
+      if (S.livre === "sansMoi") { if (!myKey() || a[myKey()]) return false; }
+      else if (a.livre !== S.livre) return false;
     }
     return true;
   }
   function filtered(except) { return ALL.filter(function (a) { return match(a, except); }); }
-  function setF(k, v) { S[k] = v; S.open = ""; writeHash(); render(); }
+  function setF(k, v) { S[k] = v; S.open = ""; S.shown = PAGE; writeHash(); render(); }
+  function setMany(o, scrollTo) {
+    Object.keys(o).forEach(function (k) { S[k] = o[k]; });
+    S.open = ""; S.shown = PAGE;
+    if ("q" in o) $("q").value = o.q;
+    writeHash(); render();
+    if (scrollTo) $(scrollTo).scrollIntoView({ behavior: "smooth", block: "start" });
+  }
   function toggleRub(k) {
     var i = S.rubs.indexOf(k);
     if (i >= 0) S.rubs.splice(i, 1); else S.rubs.push(k);
-    S.open = ""; writeHash(); render();
+    S.open = ""; S.shown = PAGE; writeHash(); render();
   }
   function resetAll() {
-    S.q = ""; S.rubs = []; S.auteur = ""; S.annee = ""; S.statut = ""; S.alerte = ""; S.nom = ""; S.open = "";
-    $("q").value = ""; writeHash(); render();
+    setMany({ q: "", rubs: [], auteur: "", annee: "", rel: "", statut: "", livre: "", alerte: "", nom: "" });
   }
 
   // ------------------------------------------------------------------ bulle d'info
@@ -341,130 +554,159 @@
     clear(tip);
     tip.appendChild(h("div", { class: "tt", text: title }));
     rows.forEach(function (r) {
-      tip.appendChild(h("div", { class: "tr" },
-        r.c ? h("i", { style: "background:" + r.c }) : null,
-        h("b", { text: r.v }), h("span", { text: r.l })));
+      tip.appendChild(h("div", { class: "tr" }, r.c ? h("i", { style: "background:" + r.c }) : null, h("b", { text: r.v }), h("span", { text: r.l })));
     });
     tip.classList.add("on");
     var w = tip.offsetWidth, hh = tip.offsetHeight;
-    var left = Math.min(window.innerWidth - w - 10, Math.max(10, x + 14));
-    var top = y - hh - 12 < 8 ? y + 16 : y - hh - 12;
-    tip.style.left = left + "px"; tip.style.top = top + "px";
+    tip.style.left = Math.min(window.innerWidth - w - 10, Math.max(10, x + 14)) + "px";
+    tip.style.top = (y - hh - 12 < 8 ? y + 16 : y - hh - 12) + "px";
   }
   function hideTip() { tip.classList.remove("on"); }
 
-  // ------------------------------------------------------------------ rendu
+  // ------------------------------------------------------------------ mon espace
+  function renderMe() {
+    var box = clear($("me"));
+    if (!cfg.qui) {
+      box.appendChild(h("div", { class: "setup" },
+        h("div", { class: "hi" }, h("h2", { text: "Qui es-tu ?" }), h("span", { text: "Pour voir ta liste de relecture et voter pour le livre." })),
+        h("div", { class: "whoBtns" }, QUI.map(function (q) {
+          return h("button", { class: "btn ghost", type: "button", text: "Je suis " + q, onclick: function () { setQui(q); } });
+        }))));
+      return;
+    }
+    var mine = ALL.filter(function (a) { return !a.manquant && a.rel === cfg.qui; });
+    var relu = mine.filter(function (a) { return a.statut === "relu"; }).length;
+    var cours = mine.filter(function (a) { return a.statut === "cours"; }).length;
+    var reste = mine.length - relu;
+    var motsReste = mine.filter(function (a) { return a.statut !== "relu"; }).reduce(function (t, a) { return t + (a.mots || 0); }, 0);
+    box.appendChild(h("div", { class: "hi" },
+      h("h2", { text: "Salut " + cfg.qui + "." }),
+      h("span", { text: reste ? plur(reste, "article") + " à relire pour toi, environ " + Math.round(motsReste / MOTS_PAR_MIN / 60) + " h de lecture." : "Ta relecture est finie." })));
+    if (!API.on()) {
+      box.appendChild(h("div", { class: "next", style: "margin:0 0 16px" },
+        h("div", {}, h("div", { class: "k", text: "Pas encore branché" }), h("div", { class: "m", style: "font-size:14.5px;color:var(--soft)", text: "Tu vois ta liste, mais rien ne s’enregistre tant que le site n’est pas branché sur le Sheet." })),
+        h("button", { class: "btn main", type: "button", text: "Brancher", onclick: openSettings })));
+    }
+    var cols = h("div", { class: "cols" });
+    // relecture
+    var q = myQueue(), first = q[0];
+    var b1 = h("div", { class: "mebox" },
+      h("h3", { text: "Ta relecture" }),
+      h("div", { class: "big" }, h("b", { class: "tab", text: nf.format(relu) }), h("span", { text: "/ " + nf.format(mine.length) + " relus · " + pct(relu, mine.length) + " %" })),
+      h("div", { class: "bar2", role: "progressbar", "aria-valuemin": 0, "aria-valuemax": mine.length, "aria-valuenow": relu, "aria-label": "Ta relecture" },
+        h("i", { class: "g", style: "width:" + (mine.length ? relu / mine.length * 100 : 0) + "%" }),
+        h("i", { class: "l", style: "width:" + (mine.length ? cours / mine.length * 100 : 0) + "%" })),
+      h("div", { class: "leg2" },
+        h("span", {}, h("i", { style: "background:var(--st-good)" }), plur(relu, "relu")),
+        h("span", {}, h("i", { style: "background:var(--lilac)" }), nf.format(cours) + " en cours"),
+        h("span", {}, h("i", { style: "background:var(--accent-track)" }), nf.format(reste - cours) + " à relire")));
+    if (first) {
+      b1.appendChild(h("div", { class: "next" },
+        h("div", {},
+          h("div", { class: "k", text: first.statut === "cours" ? "À reprendre" : "Le prochain" }),
+          h("div", { class: "t", text: first.titre }),
+          h("div", { class: "m", text: [first.rub, moisAn(first.date), first.auteur, "≈ " + minLecture(first) + " min"].filter(Boolean).join(" · ") })),
+        docLink(first, "btn main", first.statut === "cours" ? "Reprendre" : "Ouvrir le Doc")));
+      var ul = h("ul", { class: "queue" });
+      q.slice(1, 5).forEach(function (a) {
+        ul.appendChild(h("li", {},
+          h("div", { class: "qt", title: a.titre }, a.statut === "cours" ? icon("cours", 14) : null, " ", a.titre, h("span", { class: "qm", text: moisAn(a.date) })),
+          h("div", { class: "qa" },
+            docLink(a, "mini-btn", "Doc"),
+            h("button", { class: "mini-btn ok", type: "button", title: "Marquer relu", onclick: function () {
+              var prev = a.statut;
+              save(a, { statut: "relu" }, { msg: "« " + a.titre + " » relu ✓", undo: function () { save(a, { statut: prev }); } });
+            } }, iCheck(), "Relu"))));
+      });
+      b1.appendChild(ul);
+      b1.appendChild(h("div", { class: "metrail" },
+        h("button", { class: "lnk", type: "button", text: "Voir toute ma liste (" + reste + ")", onclick: function () { setMany({ rel: cfg.qui, statut: "pasRelu", livre: "" }, "articles"); } }),
+        relu ? h("button", { class: "lnk", type: "button", text: "Ce que j’ai relu", onclick: function () { setMany({ rel: cfg.qui, statut: "relu", livre: "" }, "articles"); } }) : null));
+    } else {
+      b1.appendChild(h("p", { class: "empty-s", style: "margin-top:14px", text: mine.length ? "Tout est relu. Champagne." : "Aucun article ne t’est attribué." }));
+    }
+    cols.appendChild(b1);
+    // votes
+    var k = myKey(), arts = ALL.filter(function (a) { return !a.manquant; });
+    var sans = arts.filter(function (a) { return !a[k]; }).length;
+    var dedans = arts.filter(function (a) { return a.livre === "dedans"; });
+    var disc = arts.filter(function (a) { return a.livre === "discuter"; }).length;
+    var mesOui = arts.filter(function (a) { return a[k] === "oui"; }).length;
+    var pg = dedans.reduce(function (t, a) { return t + pages(a.mots); }, 0);
+    var b2 = h("div", { class: "mebox" },
+      h("h3", { text: "Tes votes pour le livre" }),
+      h("div", { class: "big" }, h("b", { class: "tab", text: nf.format(sans) }), h("span", { text: sans ? (sans > 1 ? "articles attendent ton vote" : "article attend ton vote") : "Tous tes votes sont faits." })),
+      h("div", { class: "metrail" },
+        sans ? h("button", { class: "btn main", type: "button", "data-tri": "", onclick: openTri }, "Lancer le tri rapide") : null,
+        h("button", { class: "lnk", type: "button", text: "Voir le livre", onclick: function () { $("livreCard").scrollIntoView({ behavior: "smooth", block: "start" }); } })),
+      h("div", { class: "vstat" },
+        h("button", { type: "button", onclick: function () { setMany({ livre: "dedans", rel: "", statut: "" }, "articles"); } }, h("b", { class: "tab", text: nf.format(dedans.length) }), h("span", { text: "dans le livre · ≈ " + nf.format(pg) + " p." })),
+        h("button", { type: "button", onclick: function () { setMany({ livre: "discuter", rel: "", statut: "" }, "articles"); } }, h("b", { class: "tab", text: nf.format(disc) }), h("span", { text: "à discuter avec " + other(cfg.qui) })),
+        h("div", {}, h("b", { class: "tab", text: nf.format(mesOui) }), h("span", { text: "de tes oui" }))));
+    cols.appendChild(b2);
+    box.appendChild(cols);
+  }
+
+  // ------------------------------------------------------------------ filtres
   function renderFilters() {
     var chips = clear($("rubChips"));
     RUBS.forEach(function (r) {
-      chips.appendChild(h("button", {
-        class: "chip", type: "button", "aria-pressed": S.rubs.indexOf(r.k) >= 0 ? "true" : "false",
-        onclick: function () { toggleRub(r.k); }
-      }, h("span", { class: "sw", style: "background:" + r.hex }), r.k));
+      chips.appendChild(h("button", { class: "chip", type: "button", "aria-pressed": S.rubs.indexOf(r.k) >= 0 ? "true" : "false", onclick: function () { toggleRub(r.k); } },
+        h("span", { class: "sw", style: "background:" + r.hex }), r.k));
     });
-    // plumes
+    function fill(id, opts, val) {
+      var el = clear($(id));
+      opts.forEach(function (o) { el.appendChild(h("option", { value: o[0], text: o[1] })); });
+      el.value = val; el.classList.toggle("on", !!val);
+    }
+    fill("fRel", [["", "Tous les relecteurs"], ["Florian", "Pour Florian"], ["Amélien", "Pour Amélien"]], S.rel);
+    fill("fStatut", STATUTS, S.statut);
+    fill("fLivre", [["", "Livre : tout"], ["dedans", "Dans le livre"], ["discuter", "À discuter"], ["attente", "Votes en attente"], ["ecarte", "Écartés"]]
+      .concat(cfg.qui ? [["sansMoi", "Sans mon vote"]] : []), S.livre);
     var aus = {};
     ALL.forEach(function (a) { if (!a.manquant) { var k = a.auteur || "(non signé)"; aus[k] = (aus[k] || 0) + 1; } });
-    var fa = clear($("fAuteur"));
-    fa.appendChild(h("option", { value: "", text: "Toutes les plumes" }));
-    Object.keys(aus).sort(function (x, y) { return aus[y] - aus[x] || x.localeCompare(y, "fr"); })
-      .forEach(function (k) { fa.appendChild(h("option", { value: k, text: k + " (" + aus[k] + ")" })); });
-    fa.value = S.auteur; fa.classList.toggle("on", !!S.auteur);
-    // années
+    fill("fAuteur", [["", "Toutes les plumes"]].concat(Object.keys(aus).sort(function (x, y) { return aus[y] - aus[x] || x.localeCompare(y, "fr"); })
+      .map(function (k) { return [k, k + " (" + aus[k] + ")"]; })), S.auteur);
     var ys = {};
     ALL.forEach(function (a) { if (a.annee) ys[a.annee] = 1; });
-    var fy = clear($("fAnnee"));
-    fy.appendChild(h("option", { value: "", text: "Toutes les années" }));
-    Object.keys(ys).sort().forEach(function (y) { fy.appendChild(h("option", { value: y, text: y })); });
-    fy.value = S.annee; fy.classList.toggle("on", !!S.annee);
-    // statut
-    var fs = clear($("fStatut"));
-    STATUTS.concat(HAS_LIVRE ? LIVRE_STATUTS : []).forEach(function (o) { fs.appendChild(h("option", { value: o[0], text: o[1] })); });
-    fs.value = S.statut; fs.classList.toggle("on", !!S.statut);
-    // filtres actifs hors menus
+    fill("fAnnee", [["", "Toutes les années"]].concat(Object.keys(ys).sort().map(function (y) { return [y, y]; })), S.annee);
     var act = clear($("active"));
     function tag(label, onx) {
-      act.appendChild(h("span", { class: "tagx" }, label,
-        h("button", { type: "button", "aria-label": "Retirer le filtre " + label, onclick: onx, text: "×" })));
+      act.appendChild(h("span", { class: "tagx" }, label, h("button", { type: "button", "aria-label": "Retirer le filtre " + label, onclick: onx, text: "×" })));
     }
     if (S.nom) tag("Cite " + S.nom, function () { setF("nom", ""); });
     if (S.alerte) tag(TAGS[S.alerte] ? TAGS[S.alerte].lab : S.alerte, function () { setF("alerte", ""); });
-    if (S.q || S.rubs.length || S.auteur || S.annee || S.statut || S.alerte || S.nom) {
-      act.appendChild(h("button", { class: "reset", type: "button", onclick: resetAll, text: "Tout réafficher" }));
-    }
+    if (anyFilter()) act.appendChild(h("button", { class: "reset", type: "button", onclick: resetAll, text: "Tout réafficher" }));
   }
 
+  // ------------------------------------------------------------------ chiffres clés
   function renderKpis(list) {
     var arts = list.filter(function (a) { return !a.manquant; });
     var manq = list.length - arts.length;
     var mots = arts.reduce(function (t, a) { return t + (a.mots || 0); }, 0);
-    var plumes = {};
-    arts.forEach(function (a) { if (a.auteur) plumes[a.auteur] = 1; });
-    var ys = {}, best = ["", 0];
-    arts.forEach(function (a) { if (a.annee) { ys[a.annee] = (ys[a.annee] || 0) + 1; if (ys[a.annee] > best[1]) best = [a.annee, ys[a.annee]]; } });
-    var yk = Object.keys(ys).sort();
+    var relu = arts.filter(function (a) { return a.statut === "relu"; }).length;
+    var parQui = QUI.map(function (q) {
+      var m = arts.filter(function (a) { return a.rel === q; });
+      return q + " " + m.filter(function (a) { return a.statut === "relu"; }).length + "/" + m.length;
+    });
+    var dedans = arts.filter(function (a) { return a.livre === "dedans"; });
+    var disc = arts.filter(function (a) { return a.livre === "discuter"; }).length;
     var todo = list.filter(function (a) { return a.tags.length; }).length;
     var k = clear($("kpis"));
-    function tile(l, v, d, cls, extra) {
-      k.appendChild(h("div", { class: "kpi" + (cls ? " " + cls : "") },
-        h("div", { class: "l", text: l }), h("div", { class: "v" }, extra, v), h("div", { class: "d", text: d })));
+    function tile(l, v, small, d, ic) {
+      k.appendChild(h("div", { class: "kpi" },
+        h("div", { class: "l", text: l }), h("div", { class: "v tab" }, ic, v, small ? h("small", { text: small }) : null), h("div", { class: "d", text: d })));
     }
-    tile("Articles", nf.format(arts.length), manq ? "+ " + manq + " introuvable" + (manq > 1 ? "s" : "") : "tous récupérés");
-    tile("Mots", nfc.format(mots), "≈ " + nf.format(Math.round(mots / MOTS_PAR_PAGE)) + " pages de livre");
-    tile("Plumes", nf.format(Object.keys(plumes).length), "auteurs et autrices");
-    var span = yk.length ? (+yk[yk.length - 1] - +yk[0] + 1) : 0;
-    tile("Période", span ? span + (span > 1 ? " ans" : " an") : "—",
-      yk.length ? (yk[0] === yk[yk.length - 1] ? yk[0] : yk[0] + " → " + yk[yk.length - 1]) + (best[1] ? " · pic en " + best[0] + " (" + best[1] + ")" : "") : "");
-    tile("À traiter", nf.format(todo), todo ? "articles avec une alerte" : "rien à signaler", "warn", todo ? icon("serious", 22) : icon("good", 22));
+    tile("Articles", nf.format(arts.length), "", manq ? "+ " + plur(manq, "introuvable") : "tous récupérés");
+    tile("Relus", nf.format(relu), "/ " + nf.format(arts.length), parQui.join(" · "));
+    tile("Dans le livre", nf.format(dedans.length), "", "≈ " + nf.format(dedans.reduce(function (t, a) { return t + pages(a.mots); }, 0)) + " pages · " + nf.format(disc) + " à discuter");
+    tile("À traiter", nf.format(todo), "", todo ? plur(todo, "article") + " avec une alerte" : "rien à signaler", todo ? icon("serious", 22) : icon("good", 22));
+    tile("Mots", nfc.format(mots), "", "≈ " + nf.format(Math.round(mots / MOTS_PAR_PAGE)) + " pages si on gardait tout");
   }
 
-  function renderRelecture(list) {
-    var arts = list.filter(function (a) { return !a.manquant; });
-    var n = arts.length;
-    var f = arts.filter(function (a) { return a.relF; }).length;
-    var am = arts.filter(function (a) { return a.relA; }).length;
-    var both = arts.filter(function (a) { return a.relF && a.relA; }).length;
-    var bn = clear($("bothNum"));
-    bn.appendChild(document.createTextNode(nf.format(both)));
-    bn.appendChild(h("small", { text: "/ " + nf.format(n) }));
-    $("bothLab").textContent = both === n && n ? "tout est relu par vous deux. Champagne." : "relus par vous deux (" + pct(both, n) + " %)";
-    var m = clear($("meters"));
-    function meter(label, v, tot) {
-      m.appendChild(h("div", { class: "meter" },
-        h("div", { class: "row" }, h("b", { text: label }), h("span", { class: "tab", text: nf.format(v) + " / " + nf.format(tot) + " · " + pct(v, tot) + " %" })),
-        h("div", { class: "track", role: "progressbar", "aria-label": label, "aria-valuemin": 0, "aria-valuemax": tot, "aria-valuenow": v },
-          h("div", { class: "fill", style: "width:" + (tot ? v / tot * 100 : 0) + "%" }))));
-    }
-    meter("Relu par Florian", f, n);
-    meter("Relu par Amélien", am, n);
-    if (HAS_LIVRE) {
-      var oui = arts.filter(function (a) { return a.livre === "oui"; }).length;
-      var peut = arts.filter(function (a) { return a.livre === "peut"; }).length;
-      var non = arts.filter(function (a) { return a.livre === "non"; }).length;
-      meter("Tri pour le livre (décidés)", oui + peut + non, n);
-      m.appendChild(h("div", { class: "hint", style: "font-size:12.5px;color:var(--muted)", text: oui + " oui · " + peut + " peut-être · " + non + " non" }));
-    }
-    $("livreTip").hidden = HAS_LIVRE;
-    $("relHint").textContent = cfg.sheetCsv
-      ? "Lu dans le Google Sheet : ce que vous cochez là-bas apparaît ici à chaque visite."
-      : "Coche « Relu par Florian » et « Relu par Amélien » dans le Google Sheet, puis branche-le (en haut à droite).";
-    var rp = clear($("rubprog"));
-    rp.appendChild(h("div", { class: "r hd" }, h("span", { text: "Rubrique" }), h("span", { text: "Florian" }), h("span", { text: "Amélien" }), h("span", { class: "c", text: "Art." })));
-    RUBS.forEach(function (r) {
-      var sub = arts.filter(function (a) { return a.rubK === r.k; });
-      if (!sub.length) return;
-      var sf = sub.filter(function (a) { return a.relF; }).length, sa = sub.filter(function (a) { return a.relA; }).length;
-      rp.appendChild(h("div", { class: "r" },
-        h("span", { class: "n" }, h("span", { class: "sw", style: "background:" + r.hex }), r.k),
-        h("span", { class: "t", title: "Florian : " + sf + " / " + sub.length }, h("i", { style: "width:" + sf / sub.length * 100 + "%" })),
-        h("span", { class: "t", title: "Amélien : " + sa + " / " + sub.length }, h("i", { style: "width:" + sa / sub.length * 100 + "%" })),
-        h("span", { class: "c tab", text: sub.length })));
-    });
-  }
-
+  // ------------------------------------------------------------------ à traiter
   function renderTodo() {
-    var list = filtered("alerte");
-    var c = {};
+    var list = filtered("alerte"), c = {};
     list.forEach(function (a) { a.tags.forEach(function (t) { c[t] = (c[t] || 0) + 1; }); });
     if (S.alerte && !c[S.alerte]) c[S.alerte] = 0;
     var box = clear($("todo"));
@@ -475,13 +717,119 @@
     }
     keys.forEach(function (t) {
       var m = TAGS[t];
-      box.appendChild(h("button", {
-        class: "td" + (S.alerte === t ? " on" : ""), type: "button", "aria-pressed": S.alerte === t ? "true" : "false",
-        onclick: function () { setF("alerte", S.alerte === t ? "" : t); }
+      box.appendChild(h("button", { class: "td" + (S.alerte === t ? " on" : ""), type: "button", "aria-pressed": S.alerte === t ? "true" : "false",
+        onclick: function () { setF("alerte", S.alerte === t ? "" : t); if (S.alerte) $("articles").scrollIntoView({ behavior: "smooth", block: "start" }); }
       }, icon(m.st), h("div", {}, h("div", { class: "lb", text: m.lab }), h("div", { class: "ds", text: m.ds })), h("span", { class: "nb tab", text: c[t] })));
     });
   }
 
+  // ------------------------------------------------------------------ la relecture
+  function renderRelecture(list) {
+    var arts = list.filter(function (a) { return !a.manquant; });
+    var box = clear($("relWho"));
+    QUI.forEach(function (q) {
+      var m = arts.filter(function (a) { return a.rel === q; });
+      var r = m.filter(function (a) { return a.statut === "relu"; }).length;
+      var c = m.filter(function (a) { return a.statut === "cours"; }).length;
+      box.appendChild(h("div", {},
+        h("div", { class: "row" }, h("b", { text: q + (q === cfg.qui ? " (toi)" : "") }), h("span", { class: "tab", text: r + " / " + m.length + " relus" + (c ? " · " + c + " en cours" : "") })),
+        h("div", { class: "bar2", role: "progressbar", "aria-label": "Relecture de " + q, "aria-valuemin": 0, "aria-valuemax": m.length, "aria-valuenow": r },
+          h("i", { class: "g", style: "width:" + (m.length ? r / m.length * 100 : 0) + "%" }),
+          h("i", { class: "l", style: "width:" + (m.length ? c / m.length * 100 : 0) + "%" }))));
+    });
+    // ce qui bouge
+    var ev = [];
+    arts.forEach(function (a) {
+      if (a.statut === "relu" && a.reluLe) ev.push({ t: a.reluLe, a: a, k: "relu" });
+      else if (a.docModif) ev.push({ t: a.docModif, a: a, k: "modif" });
+    });
+    ev.sort(function (x, y) { return x.t < y.t ? 1 : -1; });
+    var feed = clear($("feed"));
+    if (!ev.length) {
+      feed.appendChild(h("li", {}, icon("todo", 18), h("p", { class: "empty-s", text: API.on() ? "Rien de relu pour l’instant. Le premier qui finit choisit le resto." : "L’activité apparaîtra ici une fois le site branché sur le Sheet." })));
+      return;
+    }
+    ev.slice(0, 6).forEach(function (e) {
+      var a = e.a;
+      feed.appendChild(h("li", {}, icon(e.k === "relu" ? "good" : "cours", 18),
+        h("div", {}, e.k === "relu" ? [h("b", { text: a.rel || a.majPar || "?" }), " a relu « " + a.titre + " »"] : ["Doc modifié : « " + a.titre + " »"],
+          h("span", { text: " · " + relTime(e.t) }))));
+    });
+  }
+
+  // ------------------------------------------------------------------ le livre
+  function renderLivre() {
+    var list = filtered("livre").filter(function (a) { return !a.manquant; });
+    var c = { dedans: [], discuter: [], attente: [], ecarte: [] };
+    list.forEach(function (a) { if (c[a.livre]) c[a.livre].push(a); });
+    var k = myKey();
+    var pg = c.dedans.reduce(function (t, a) { return t + pages(a.mots); }, 0);
+    var sansMoi = k ? list.filter(function (a) { return !a[k]; }).length : 0;
+    var bs = clear($("bstats"));
+    var subs = {
+      dedans: "≈ " + nf.format(pg) + " pages",
+      discuter: "vous n’êtes pas d’accord",
+      attente: k ? "dont " + nf.format(sansMoi) + " sans ton vote" : "il manque un vote",
+      ecarte: "non tous les deux"
+    };
+    ["dedans", "discuter", "attente", "ecarte"].forEach(function (key) {
+      bs.appendChild(h("button", { class: "bstat" + (S.livre === key ? " on" : ""), type: "button", "aria-pressed": S.livre === key ? "true" : "false",
+        onclick: function () { setF("livre", S.livre === key ? "" : key); }
+      }, h("div", { class: "n tab" }, h("i", { class: LIVRE[key].cls }), nf.format(c[key].length)), h("div", { class: "x", text: LIVRE[key].lab + " · " + subs[key] })));
+    });
+    // par année
+    var ys = {};
+    list.forEach(function (a) {
+      if (!a.annee) return;
+      var y = ys[a.annee] || (ys[a.annee] = { dedans: 0, discuter: 0, attente: 0, ecarte: 0, t: 0, p: 0 });
+      y[a.livre]++; y.t++;
+      if (a.livre === "dedans") y.p += pages(a.mots);
+    });
+    var max = Math.max.apply(null, Object.keys(ys).map(function (y) { return ys[y].t; }).concat([1]));
+    var yb = clear($("years"));
+    Object.keys(ys).sort().forEach(function (y) {
+      var d = ys[y];
+      yb.appendChild(h("button", { class: "yr", type: "button", title: "Filtrer " + y, onclick: function () { setF("annee", S.annee === y ? "" : y); } },
+        h("b", { class: "tab", text: y }),
+        h("span", { class: "yb", style: "width:" + (d.t / max * 100) + "%" }, ["dedans", "discuter", "attente", "ecarte"].map(function (key) {
+          return d[key] ? h("i", { class: LIVRE[key].cls, style: "flex:" + d[key] + " 1 0", title: LIVRE[key].lab + " : " + d[key] }) : null;
+        })),
+        h("span", { class: "yc tab", text: d.dedans + " / " + d.t + (d.p ? " · " + d.p + " p." : "") })));
+    });
+    var lg = clear($("yLegend"));
+    ["dedans", "discuter", "attente", "ecarte"].forEach(function (key) { lg.appendChild(h("span", {}, h("i", { class: "sw " + LIVRE[key].cls }), LIVRE[key].lab)); });
+    // à discuter
+    var dl = clear($("discuter"));
+    if (!c.discuter.length) dl.appendChild(h("li", {}, h("p", { class: "empty-s", text: "Aucun désaccord pour l’instant." })));
+    c.discuter.slice(0, 8).forEach(function (a) {
+      dl.appendChild(h("li", {},
+        h("div", {}, h("div", { class: "bt", text: a.titre }),
+          h("div", { class: "bm", text: moisAn(a.date) + " · Florian : " + LV_LAB[a.livreF] + " · Amélien : " + LV_LAB[a.livreA] })),
+        k && API.on() ? voteSeg(a, true) : null));
+    });
+    if (c.discuter.length > 8) dl.appendChild(h("li", {}, h("button", { class: "lnk", type: "button", text: "Voir les " + c.discuter.length + " à discuter", onclick: function () { setMany({ livre: "discuter" }, "articles"); } })));
+    // sommaire
+    var toc = clear($("toc"));
+    if (!c.dedans.length) {
+      toc.appendChild(h("li", {}, h("p", { class: "empty-s", text: "Le sommaire se remplit quand vous votez oui tous les deux. Il suit l’ordre de parution." })));
+      return;
+    }
+    var page = 1, annee = "", n = 0, lim = S.tocAll ? 1e9 : 24;
+    var parAn = {};
+    c.dedans.forEach(function (a) { parAn[a.annee] = (parAn[a.annee] || 0) + 1; });
+    c.dedans.slice().sort(function (x, y) { return (x.date || "") < (y.date || "") ? -1 : 1; }).forEach(function (a) {
+      if (n < lim) {
+        if (a.annee !== annee) { annee = a.annee; toc.appendChild(h("li", { class: "ty" }, annee || "Sans date", h("span", { text: plur(parAn[a.annee], "article") }))); }
+        toc.appendChild(h("li", { class: "it" }, h("div", {}, h("b", { text: a.titre }), " · " + (a.auteur || "?")), h("span", { text: "p. " + page })));
+      }
+      n++; page += pages(a.mots);
+    });
+    if (c.dedans.length > lim || S.tocAll) {
+      toc.appendChild(h("li", { style: "margin-top:10px" }, h("button", { class: "lnk", type: "button", text: S.tocAll ? "Replier le sommaire" : "Voir tout le sommaire (" + c.dedans.length + ")", onclick: function () { S.tocAll = !S.tocAll; renderLivre(); } })));
+    }
+  }
+
+  // ------------------------------------------------------------------ graphiques (exploration)
   function quarters() {
     var ks = ALL.filter(function (a) { return a.trim; }).map(function (a) { return a.trim; }).sort();
     if (!ks.length) return [];
@@ -520,7 +868,6 @@
       ax.appendChild(s("line", { x1: padL, x2: W - padR, y1: y, y2: y, class: t === 0 ? "bl" : "gl" }));
       var tx = s("text", { x: padL - 8, y: y + 4, "text-anchor": "end", class: "tab" }); tx.textContent = t; ax.appendChild(tx);
     }
-    svg.appendChild(ax);
     var band = pw / qs.length, bw = Math.max(3, Math.min(24, band * 0.72));
     qs.forEach(function (q, i) {
       var x = padL + i * band + (band - bw) / 2;
@@ -536,13 +883,13 @@
         g.appendChild(s("path", { d: d, fill: sg[0].hex, class: "seg" }));
         y0 = top;
       });
-      if (q.slice(-1) === "1" || i === 0) {
-        var lx = s("text", { x: padL + i * band + (q.slice(-1) === "1" ? band * 2 : band / 2), y: H - 6, "text-anchor": "middle" });
+      if (q.slice(-1) === "1") {
+        var lx = s("text", { x: padL + i * band + band * 2, y: H - 6, "text-anchor": "middle" });
         lx.textContent = q.slice(0, 4);
-        if (q.slice(-1) === "1" || qs.length < 30) ax.appendChild(lx);
+        ax.appendChild(lx);
       }
       var hit = s("rect", { x: padL + i * band, y: padT, width: band, height: ph, class: "hit", tabindex: "0", role: "button",
-        "aria-label": "T" + q.slice(-1) + " " + q.slice(0, 4) + " : " + tot + " article" + (tot > 1 ? "s" : "") });
+        "aria-label": "T" + q.slice(-1) + " " + q.slice(0, 4) + " : " + plur(tot, "article") });
       function tipAt(ev) {
         var rows = segs.slice().reverse().map(function (sg) { return { c: sg[0].hex, v: sg[1], l: sg[0].k }; });
         rows.push({ v: tot, l: "au total" });
@@ -564,7 +911,6 @@
     box.appendChild(svg);
     var lg = clear($("tlLegend"));
     series.forEach(function (r) { lg.appendChild(h("span", {}, h("span", { class: "sw", style: "background:" + r.hex }), r.k)); });
-    // les chiffres, par année
     var years = {};
     list.forEach(function (a) { years[a.annee] = years[a.annee] || {}; years[a.annee][a.rubK] = (years[a.annee][a.rubK] || 0) + 1; });
     var tb = h("table", { class: "mini tab" });
@@ -578,8 +924,12 @@
 
   function renderRubriques() {
     var list = filtered("rubs").filter(function (a) { return !a.manquant; });
-    var c = {}, mots = {}, both = {};
-    list.forEach(function (a) { c[a.rubK] = (c[a.rubK] || 0) + 1; mots[a.rubK] = (mots[a.rubK] || 0) + (a.mots || 0); if (a.relF && a.relA) both[a.rubK] = (both[a.rubK] || 0) + 1; });
+    var c = {}, mots = {}, relu = {}, livre = {};
+    list.forEach(function (a) {
+      c[a.rubK] = (c[a.rubK] || 0) + 1; mots[a.rubK] = (mots[a.rubK] || 0) + (a.mots || 0);
+      if (a.statut === "relu") relu[a.rubK] = (relu[a.rubK] || 0) + 1;
+      if (a.livre === "dedans") livre[a.rubK] = (livre[a.rubK] || 0) + 1;
+    });
     var series = RUBS.concat(c[AUTRE.k] ? [AUTRE] : []).filter(function (r) { return c[r.k]; });
     var tot = list.length;
     var bar = clear($("segbar"));
@@ -587,12 +937,9 @@
     series.forEach(function (r) {
       var share = c[r.k] / tot, label = Math.round(share * 100) + " %";
       var fits = share * wpx > label.length * 7.5 + 16;
-      var b = h("button", {
-        type: "button", class: S.rubs.length && S.rubs.indexOf(r.k) < 0 ? "off" : "",
-        style: "flex:" + c[r.k] + " 1 0;background:" + r.hex,
+      var b = h("button", { type: "button", class: S.rubs.length && S.rubs.indexOf(r.k) < 0 ? "off" : "", style: "flex:" + c[r.k] + " 1 0;background:" + r.hex,
         "aria-label": r.k + " : " + c[r.k] + " articles, " + label, "aria-pressed": S.rubs.indexOf(r.k) >= 0 ? "true" : "false",
-        onclick: function () { hideTip(); toggleRub(r.k); }
-      }, fits ? label : "");
+        onclick: function () { hideTip(); toggleRub(r.k); } }, fits ? label : "");
       function tp(ev) { var bb = b.getBoundingClientRect(); showTip(ev && ev.clientX != null ? ev.clientX : bb.left + bb.width / 2, bb.top, r.k, [{ c: r.hex, v: c[r.k], l: "articles · " + label }, { v: nfc.format(mots[r.k]), l: "mots" }]); }
       b.addEventListener("pointermove", tp); b.addEventListener("focus", function () { tp(null); });
       b.addEventListener("pointerleave", hideTip); b.addEventListener("blur", hideTip);
@@ -601,10 +948,10 @@
     var lg = clear($("segLegend"));
     series.forEach(function (r) { lg.appendChild(h("span", {}, h("span", { class: "sw", style: "background:" + r.hex }), r.k + " ", h("b", { class: "tab", text: c[r.k] }))); });
     var tb = h("table", { class: "mini tab" });
-    tb.appendChild(h("tr", {}, h("th", { text: "Rubrique" }), h("th", { text: "Articles" }), h("th", { text: "Mots / art." }), h("th", { text: "Relus à deux" })));
+    tb.appendChild(h("tr", {}, h("th", { text: "Rubrique" }), h("th", { text: "Articles" }), h("th", { text: "Mots / art." }), h("th", { text: "Relus" }), h("th", { text: "Livre" })));
     series.forEach(function (r) {
       tb.appendChild(h("tr", {}, h("td", {}, h("span", { class: "sw", style: "background:" + r.hex + ";margin-right:7px" }), r.k),
-        h("td", { text: c[r.k] }), h("td", { text: nf.format(Math.round(mots[r.k] / c[r.k])) }), h("td", { text: (both[r.k] || 0) })));
+        h("td", { text: c[r.k] }), h("td", { text: nf.format(Math.round(mots[r.k] / c[r.k])) }), h("td", { text: relu[r.k] || 0 }), h("td", { text: livre[r.k] || 0 })));
     });
     clear($("rubWords")).appendChild(tb);
   }
@@ -614,25 +961,22 @@
     var c = {}, mots = {};
     list.forEach(function (a) { var k = a.auteur || "(non signé)"; c[k] = (c[k] || 0) + 1; mots[k] = (mots[k] || 0) + (a.mots || 0); });
     var keys = Object.keys(c).sort(function (x, y) { return c[y] - c[x] || x.localeCompare(y, "fr"); });
-    var TOP = 12, top = keys.slice(0, TOP);
+    var top = keys.slice(0, 12);
     if (S.auteur && top.indexOf(S.auteur) < 0 && c[S.auteur]) top.push(S.auteur);
     var rest = keys.filter(function (k) { return top.indexOf(k) < 0; });
     var max = Math.max.apply(null, top.map(function (k) { return c[k]; }).concat([1]));
     var box = clear($("authors"));
-    function row(name, v, clickable) {
-      var w = v / max * 100;
-      var el = h(clickable ? "button" : "div", {
-        class: "hb" + (S.auteur === name ? " on" : ""), type: clickable ? "button" : null,
-        title: clickable ? name + " : " + v + " article" + (v > 1 ? "s" : "") + ", " + nf.format(mots[name] || 0) + " mots" : null,
-        onclick: clickable ? function () { setF("auteur", S.auteur === name ? "" : name); } : null
+    top.forEach(function (name) {
+      var v = c[name];
+      box.appendChild(h("button", { class: "hb" + (S.auteur === name ? " on" : ""), type: "button",
+        title: name + " : " + plur(v, "article") + ", " + nf.format(mots[name] || 0) + " mots",
+        onclick: function () { setF("auteur", S.auteur === name ? "" : name); }
       }, h("span", { class: "nm", text: name }),
-        h("span", { class: "bw" }, h("span", { class: "bar", style: "width:calc((100% - 34px) * " + (w / 100) + ")" }), h("span", { class: "vl tab", text: v })));
-      box.appendChild(el);
-    }
-    top.forEach(function (k) { row(k, c[k], true); });
+        h("span", { class: "bw" }, h("span", { class: "bar", style: "width:calc((100% - 34px) * " + (v / max) + ")" }), h("span", { class: "vl tab", text: v }))));
+    });
     if (rest.length) {
       var nr = rest.reduce(function (t, k) { return t + c[k]; }, 0);
-      box.appendChild(h("p", { class: "restline", text: "+ " + rest.length + " autres plumes, " + nr + " article" + (nr > 1 ? "s" : "") + " à elles toutes (détail dans « Voir tous les chiffres »)." }));
+      box.appendChild(h("p", { class: "restline", text: "+ " + rest.length + " autres plumes, " + plur(nr, "article") + " à elles toutes (détail dans « Voir tous les chiffres »)." }));
     }
     var tb = h("table", { class: "mini tab" });
     tb.appendChild(h("tr", {}, h("th", { text: "Plume" }), h("th", { text: "Articles" }), h("th", { text: "Mots" })));
@@ -641,8 +985,7 @@
   }
 
   function renderNames() {
-    var list = filtered("nom");
-    var c = {};
+    var list = filtered("nom"), c = {};
     list.forEach(function (a) { (a.noms || []).forEach(function (n) { c[n] = (c[n] || 0) + 1; }); });
     var keys = Object.keys(c).filter(function (k) { return c[k] > 1 || k === S.nom; })
       .sort(function (x, y) { return c[y] - c[x] || x.localeCompare(y, "fr"); }).slice(0, 40);
@@ -650,55 +993,133 @@
     var box = clear($("names"));
     if (!keys.length) { box.appendChild(h("p", { class: "hint", text: "Pas de nom qui revient dans cette sélection." })); return; }
     keys.forEach(function (k) {
-      box.appendChild(h("button", {
-        class: "name" + (S.nom === k ? " on" : ""), type: "button", "aria-pressed": S.nom === k ? "true" : "false",
-        onclick: function () { setF("nom", S.nom === k ? "" : k); }
-      }, k, h("b", { class: "tab", text: c[k] || 0 })));
+      box.appendChild(h("button", { class: "name" + (S.nom === k ? " on" : ""), type: "button", "aria-pressed": S.nom === k ? "true" : "false",
+        onclick: function () { setF("nom", S.nom === k ? "" : k); } }, k, h("b", { class: "tab", text: c[k] || 0 })));
     });
   }
 
+  // ------------------------------------------------------------------ tableau des articles
+  var ST_RANK = { relu: 2, cours: 1, "": 0 };
   function sortList(list) {
     var k = S.sort, d = S.dir;
     return list.slice().sort(function (x, y) {
       var a, b;
-      if (k === "mots") { a = x.mots || 0; b = y.mots || 0; }
-      else if (k === "relu") { a = (x.relF ? 1 : 0) + (x.relA ? 1 : 0); b = (y.relF ? 1 : 0) + (y.relA ? 1 : 0); }
+      if (k === "relu") { a = (x.manquant ? -1 : ST_RANK[x.statut]) + (x.rel || "~"); b = (y.manquant ? -1 : ST_RANK[y.statut]) + (y.rel || "~"); }
+      else if (k === "livre") { a = x.livre ? LIVRE[x.livre].r : 9; b = y.livre ? LIVRE[y.livre].r : 9; }
       else if (k === "alertes") { a = x.tags.length ? TAGS[x.tags[0]].o : 99; b = y.tags.length ? TAGS[y.tags[0]].o : 99; }
       else if (k === "date") { a = x.date || "9999"; b = y.date || "9999"; }
       else { a = fold(x[k === "rub" ? "rubK" : k]); b = fold(y[k === "rub" ? "rubK" : k]); }
       return (a < b ? -1 : a > b ? 1 : fold(x.titre) < fold(y.titre) ? -1 : 1) * d;
     });
   }
-  function relPill(on, who) {
-    return h("span", { class: "rv" + (on ? " ok" : ""), title: (on ? "Relu par " : "Pas encore relu par ") + who },
-      on ? svgFrom('<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.3l2.2 2.2 4.8-5"/></svg>') : null, who[0]);
+  function relCell(a) {
+    if (a.manquant) return h("span", { class: "miss", text: "—" });
+    if (!a.rel) return h("span", { class: "miss", text: "personne" });
+    var st = a.statut;
+    return h("span", { class: "rst" + (st === "relu" ? " relu" : st === "cours" ? " cours" : ""),
+      title: (st === "relu" ? "Relu par " + a.rel + (a.reluLe ? " le " + dateFr(a.reluLe.slice(0, 10)) : "") : st === "cours" ? "En cours chez " + a.rel : "À relire par " + a.rel) },
+      icon(st === "relu" ? "good" : st === "cours" ? "cours" : "todo", 16), a.rel);
   }
+  function votesCell(a) {
+    if (a.manquant) return h("span", { class: "miss", text: "—" });
+    return h("span", { class: "votes" }, [["F", "Florian", a.livreF], ["A", "Amélien", a.livreA]].map(function (v) {
+      return h("span", { class: "vt " + v[2], title: v[1] + " : " + LV_LAB[v[2]], text: v[0] + LV_SYM[v[2]] });
+    }));
+  }
+  function editing() {
+    var el = document.activeElement;
+    return !!(el && (el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && el.closest && el.closest("#tbody"))));
+  }
+  var pendingRender = false;
+  function safeRender() { if (editing()) { pendingRender = true; return; } render(); }
+
   function detailRow(a) {
-    var r = rubOf(a.rub);
-    var left = h("div", {},
-      a.extrait ? h("p", { class: "ex", text: "« " + (a.extrait.length >= 318 ? a.extrait.slice(0, a.extrait.lastIndexOf(" ")).replace(/[,;:.\s]+$/, "") + "… »" : a.extrait.trim() + " »") }) : h("p", { class: "ex", text: a.manquant ? "Cet article n’a jamais été archivé par la Wayback Machine." : "Pas d’extrait." }),
-      a.notes ? h("div", {}, h("div", { class: "dl", text: "Notes du Sheet" }), h("p", { class: "facts", text: a.notes })) : null,
-      a.tags.length ? h("div", {}, h("div", { class: "dl", text: "Alertes" }), a.tags.map(function (t) { return h("div", { class: "alertline" }, icon(TAGS[t].st, 18), TAGS[t].one); })) : null,
-      a.noms && a.noms.length ? h("div", {}, h("div", { class: "dl", text: "Noms cités en gras" }),
-        h("div", { class: "names" }, a.noms.slice(0, 24).map(function (n) {
-          return h("button", { class: "name" + (S.nom === n ? " on" : ""), type: "button", onclick: function (e) { e.stopPropagation(); setF("nom", n); }, text: n });
-        }))) : null);
-    var drive = "https://drive.google.com/drive/search?q=" + encodeURIComponent('title:"' + a.titre.replace(/"/g, "") + '"');
-    var right = h("div", { class: "links" },
-      h("div", { class: "facts" },
-        h("div", {}, h("b", { text: a.auteur || "Plume inconnue" }), a.date ? " · " + moisAn(a.date) : ""),
-        h("div", {}, h("span", { class: "sw", style: "background:" + r.hex + ";margin-right:6px" }), a.rub || "—", a.mots ? " · " + nf.format(a.mots) + " mots" : ""),
-        (a.cit || a.img || a.vid) ? h("div", { text: [a.cit ? a.cit + " citation" + (a.cit > 1 ? "s" : "") : "", a.img ? a.img + " image" + (a.img > 1 ? "s" : "") : "", a.vid ? a.vid + " vidéo" + (a.vid > 1 ? "s" : "") : ""].filter(Boolean).join(" · ") }) : null,
-        HAS_LIVRE ? h("div", { text: "Livre : " + ({ oui: "oui", peut: "peut-être", non: "non" }[a.livre] || "pas encore décidé") }) : null),
-      a.gdoc ? h("a", { class: "lk", href: a.gdoc, target: "_blank", rel: "noopener" }, svgFrom(ICON_LINK), "Ouvrir le Google Doc")
-        : (!a.manquant ? h("a", { class: "lk", href: drive, target: "_blank", rel: "noopener", title: "Cherche le document dans ton Google Drive" }, svgFrom(ICON_LINK), "Trouver le doc dans Drive") : null),
-      a.src ? h("a", { class: "lk", href: a.src, target: "_blank", rel: "noopener" }, svgFrom(ICON_LINK), a.manquant ? "Tenter la Wayback Machine" : "Lire l’archive en ligne") : null,
-      a.doc ? h("button", { class: "lk", type: "button", onclick: function (e) {
-        e.stopPropagation();
-        var b = e.currentTarget;
-        (navigator.clipboard ? navigator.clipboard.writeText(a.doc) : Promise.reject()).then(function () { b.lastChild.textContent = "Nom copié"; }, function () { b.lastChild.textContent = a.doc; });
-      } }, svgFrom('<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5V3.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/></svg>'), h("span", { text: "Copier le nom du doc" })) : null);
-    return h("tr", { class: "det" }, h("td", { colspan: 7 }, h("div", { class: "detail" }, left, right)));
+    var r = rubOf(a.rub), k = myKey(), on = API.on();
+    var left = h("div", {});
+    left.appendChild(a.extrait
+      ? h("p", { class: "ex", text: "« " + (a.extrait.length >= 318 ? a.extrait.slice(0, a.extrait.lastIndexOf(" ")).replace(/[,;:.\s]+$/, "") + "… »" : a.extrait.trim() + " »") })
+      : h("p", { class: "ex", text: a.manquant ? "Cet article n’a jamais été archivé par la Wayback Machine." : "Pas d’extrait." }));
+    // notes
+    left.appendChild(h("div", { class: "dl", text: "Notes" }));
+    if (on) {
+      var ta = h("textarea", { class: "notes", placeholder: "Une remarque pour l’autre, une correction à faire, une idée pour le livre…", "aria-label": "Notes" });
+      ta.value = a.notes || "";
+      ta.addEventListener("click", function (e) { e.stopPropagation(); });
+      ta.addEventListener("keydown", function (e) { e.stopPropagation(); });
+      ta.addEventListener("blur", function () { if (ta.value.trim() !== (a.notes || "").trim()) save(a, { notes: ta.value.trim() }, { msg: "Note enregistrée" }); });
+      left.appendChild(ta);
+    } else {
+      left.appendChild(h("p", { class: "facts", text: a.notes || "Aucune note. Branche le site sur le Sheet pour en écrire." }));
+    }
+    // alertes
+    if (a.tags.length) {
+      left.appendChild(h("div", { class: "dl", text: "Alertes" }));
+      a.tags.forEach(function (t) {
+        var line = h("div", { class: "alertline" }, icon(TAGS[t].st, 18), TAGS[t].one);
+        if (on && t !== "introuvable" && t !== "auteur") {
+          line.appendChild(h("button", { class: "mini-btn ok", type: "button", onclick: function (e) {
+            e.stopPropagation();
+            var avant = a.alertes.slice();
+            save(a, { alertes: a.alertes.filter(function (raw) { return tagOf(raw, a) !== t; }) }, { msg: "Alerte réglée", undo: function () { save(a, { alertes: avant }); } });
+          } }, iCheck(), "C’est réglé"));
+        }
+        left.appendChild(line);
+        if (on && t === "auteur") {
+          var inp = h("input", { class: "inp", type: "text", placeholder: "Qui l’a écrit ?", "aria-label": "Plume de l’article" });
+          inp.addEventListener("click", function (e) { e.stopPropagation(); });
+          function go() {
+            var v = inp.value.trim();
+            if (!v) return;
+            save(a, { auteur: v, alertes: a.alertes.filter(function (raw) { return tagOf(raw, a) !== "auteur"; }) }, { msg: "Plume : " + v });
+          }
+          inp.addEventListener("keydown", function (e) { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); inp.blur(); go(); } });
+          left.appendChild(h("div", { class: "inrow" }, inp, h("button", { class: "mini-btn", type: "button", text: "OK", onclick: function (e) { e.stopPropagation(); go(); } })));
+        }
+      });
+    }
+    if (a.noms && a.noms.length) {
+      left.appendChild(h("div", { class: "dl", text: "Noms cités en gras" }));
+      left.appendChild(h("div", { class: "names" }, a.noms.slice(0, 24).map(function (n) {
+        return h("button", { class: "name solo" + (S.nom === n ? " on" : ""), type: "button", onclick: function (e) { e.stopPropagation(); setF("nom", n); }, text: n });
+      })));
+    }
+    // colonne d'actions
+    var right = h("div", { class: "acts" });
+    if (!a.manquant) {
+      right.appendChild(docLink(a, a.gdoc ? "btn main" : "btn ghost", a.gdoc ? "Ouvrir le Google Doc" : "Trouver le Doc dans Drive"));
+      right.appendChild(h("div", { class: "dl", text: "Relecture" }));
+      right.appendChild(h("div", { class: "seg", role: "group", "aria-label": "Relecture" }, [["", "À relire"], ["cours", "En cours"], ["relu", "Relu"]].map(function (o) {
+        var p = a.statut === o[0];
+        return h("button", { type: "button", class: o[0] === "relu" ? "g" : null, "aria-pressed": p ? "true" : "false", onclick: function (e) {
+          e.stopPropagation();
+          if (p) return;
+          var prev = a.statut;
+          save(a, { statut: o[0] }, { msg: ST_LAB[o[0]] + (o[0] === "relu" ? " ✓" : ""), undo: function () { save(a, { statut: prev }); } });
+        } }, o[0] === "relu" ? iCheck() : null, o[1]);
+      })));
+      var sel = h("select", { class: "sel", "aria-label": "Relecteur", style: "margin-top:8px" },
+        [["", "Personne"]].concat(QUI.map(function (q) { return [q, q]; })).map(function (o) { return h("option", { value: o[0], text: o[0] ? "Relecteur : " + o[1] : "Pas de relecteur" }); }));
+      sel.value = a.rel || "";
+      sel.addEventListener("click", function (e) { e.stopPropagation(); });
+      sel.addEventListener("change", function (e) { var prev = a.rel; save(a, { rel: e.target.value }, { msg: e.target.value ? "Pour " + e.target.value : "Plus de relecteur", undo: function () { save(a, { rel: prev }); } }); });
+      right.appendChild(h("div", {}, sel));
+      right.appendChild(h("div", { class: "dl", text: "Livre" }));
+      if (k) right.appendChild(voteSeg(a));
+      right.appendChild(h("div", { class: "small", text: "Florian : " + LV_LAB[a.livreF] + " · Amélien : " + LV_LAB[a.livreA] + (a.livre ? " → " + LIVRE[a.livre].lab.toLowerCase() : "") }));
+      if (!k) right.appendChild(h("button", { class: "lnk", type: "button", text: "Dis qui tu es pour voter", style: "justify-self:start;margin-top:6px", onclick: function (e) { e.stopPropagation(); askWho(); } }));
+    }
+    right.appendChild(h("div", { class: "dl", text: "Infos" }));
+    right.appendChild(h("div", { class: "facts" },
+      h("div", {}, h("b", { text: a.auteur || "Plume inconnue" }), a.date ? " · " + moisAn(a.date) : ""),
+      h("div", {}, h("span", { class: "sw", style: "background:" + r.hex + ";margin-right:6px" }), a.rub || "—", a.mots ? " · " + nf.format(a.mots) + " mots · ≈ " + plur(pages(a.mots), "page") : ""),
+      (a.cit || a.img || a.vid) ? h("div", { text: [a.cit ? plur(a.cit, "citation") : "", a.img ? plur(a.img, "image") : "", a.vid ? plur(a.vid, "vidéo") : ""].filter(Boolean).join(" · ") }) : null,
+      a.reluLe ? h("div", { text: "Relu " + relTime(a.reluLe) }) : null,
+      a.docModif ? h("div", { text: "Doc modifié " + relTime(a.docModif) }) : null,
+      a.maj && a.majPar ? h("div", { text: "Dernière action : " + a.majPar + ", " + relTime(a.maj) }) : null));
+    if (a.src) right.appendChild(h("a", { class: "lnk", href: a.src, target: "_blank", rel: "noopener", style: "margin-top:8px;justify-self:start", onclick: function (e) { e.stopPropagation(); } }, a.manquant ? "Tenter la Wayback Machine" : "Lire l’archive en ligne"));
+    var cell = h("td", { colspan: 7 }, h("div", { class: "detail" }, left, right));
+    cell.addEventListener("click", function (e) { e.stopPropagation(); });
+    return h("tr", { class: "det" }, cell);
   }
   function renderTable(list) {
     var tb = clear($("tbody"));
@@ -709,25 +1130,26 @@
       var b = th.querySelector("button");
       b.textContent = b.textContent.replace(/ [↑↓]$/, "") + (th.dataset.k === S.sort ? (S.dir > 0 ? " ↑" : " ↓") : "");
     });
+    if (S.open) {
+      var oi = rows.findIndex(function (a) { return a.id === S.open; });
+      if (oi >= S.shown) S.shown = oi + 1;
+    }
     var frag = document.createDocumentFragment();
-    rows.forEach(function (a) {
+    rows.slice(0, S.shown).forEach(function (a) {
       var r = rubOf(a.rub), open = S.open === a.id;
       var topSt = a.tags.length ? TAGS[a.tags[0]].st : "";
       var prClass = (topSt === "critical" || topSt === "serious" || topSt === "warn") ? " pr-" + topSt : "";
-      var titleCell = h("div", { class: "ti" + (a.manquant ? " miss" : "") });
-      if (topSt === "critical" || topSt === "serious") {
-        var mic = icon(topSt, 15); mic.classList.add("mini-ic"); mic.setAttribute("title", TAGS[a.tags[0]].one);
-        titleCell.appendChild(mic);
-      }
-      titleCell.appendChild(document.createTextNode(a.titre));
+      var title = h("div", { class: "ti" + (a.manquant ? " miss" : "") });
+      if (topSt === "critical" || topSt === "serious") { var mic = icon(topSt, 15); mic.setAttribute("aria-label", TAGS[a.tags[0]].one); title.appendChild(mic); }
+      title.appendChild(document.createTextNode(a.titre));
       var tr = h("tr", { class: "a" + prClass + (open ? " open" : ""), tabindex: "0", "aria-expanded": open ? "true" : "false" },
         h("td", { class: "dt tab", text: dateFr(a.date) }),
-        h("td", {}, titleCell),
+        h("td", {}, title),
         h("td", { class: "hm" }, h("span", { class: "rb" }, h("span", { class: "sw", style: "background:" + r.hex }), a.rub || "—")),
         h("td", { class: "au hm", text: a.auteur || "—" }),
-        h("td", { class: "mo tab hm", text: a.mots ? nf.format(a.mots) : "—" }),
-        h("td", {}, a.manquant ? h("span", { class: "miss", text: "—" }) : h("span", { class: "rl" }, relPill(a.relF, "Florian"), relPill(a.relA, "Amélien"))),
-        h("td", { class: "hm" }, h("span", { class: "al" }, a.tags.map(function (t) { var ic = icon(TAGS[t].st, 18); var w = h("span", { title: TAGS[t].one }); w.appendChild(ic); return w; }))));
+        h("td", {}, relCell(a)),
+        h("td", { class: "hm" }, votesCell(a)),
+        h("td", { class: "hm" }, h("span", { class: "al" }, a.tags.map(function (t) { var w = h("span", { title: TAGS[t].one }); w.appendChild(icon(TAGS[t].st, 18)); return w; }))));
       function toggle() { S.open = S.open === a.id ? "" : a.id; renderTable(filtered()); }
       tr.addEventListener("click", toggle);
       tr.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
@@ -735,10 +1157,18 @@
       if (open) frag.appendChild(detailRow(a));
     });
     tb.appendChild(frag);
+    var pg = clear($("pager"));
+    if (rows.length > S.shown) {
+      pg.appendChild(h("span", { text: nf.format(S.shown) + " sur " + nf.format(rows.length) }));
+      pg.appendChild(h("button", { class: "btn ghost sm", type: "button", text: "Afficher " + Math.min(PAGE, rows.length - S.shown) + " de plus", onclick: function () { S.shown += PAGE; renderTable(filtered()); } }));
+      pg.appendChild(h("button", { class: "lnk", type: "button", text: "Tout afficher", onclick: function () { S.shown = rows.length; renderTable(filtered()); } }));
+    }
   }
 
   function render() {
+    pendingRender = false;
     var list = filtered();
+    renderMe();
     renderFilters();
     var arts = list.filter(function (a) { return !a.manquant; }).length;
     var total = ALL.filter(function (a) { return !a.manquant; }).length;
@@ -746,74 +1176,238 @@
     cnt.appendChild(h("b", { class: "tab", text: nf.format(arts) }));
     cnt.appendChild(document.createTextNode(arts === total ? " articles" : " sur " + nf.format(total) + " articles"));
     var totalMots = ALL.reduce(function (t, a) { return t + (a.mots || 0); }, 0);
-    $("heroSub").textContent = nf.format(total) + " articles et " + nf.format(totalMots) + " mots récupérés après la fermeture du site. Ici, on trie, on relit, on prépare le livre.";
+    $("heroSub").textContent = nf.format(total) + " articles et " + nf.format(totalMots) + " mots récupérés après la fermeture du site. Ici, on relit, on vote, on prépare le livre.";
     renderKpis(list);
-    renderRelecture(list);
     renderTodo();
+    renderRelecture(list);
+    renderLivre();
+    renderTable(list);
     renderTimeline();
     renderRubriques();
     renderAuthors();
     renderNames();
-    renderTable(list);
-    $("footData").textContent = cfg.sheetCsv ? "Données : le Google Sheet de suivi, complété par l’instantané du 18/11/2026." : "Données : instantané du 18/11/2026.";
+    renderRetour();
+    $("footData").textContent = API.on() ? "Données : le Google Sheet de suivi" + (REMOTE.liensMaj ? " · liens des Docs vérifiés " + relTime(REMOTE.liensMaj) : "") + "." : "Données : instantané du 18/11/2026.";
   }
+
+  // ------------------------------------------------------------------ tri rapide
+  var T = null;
+  var tri = $("tri");
+  function openTri() {
+    if (!cfg.qui) { askWho(openTri); return; }
+    if (!API.on()) { needConnect(); return; }
+    var k = myKey();
+    var base = anyFilter() ? filtered() : ALL;
+    var queue = base.filter(function (a) { return !a.manquant && !a[k]; }).sort(function (x, y) { return (x.date || "9999") < (y.date || "9999") ? -1 : 1; });
+    T = { queue: queue, i: 0, hist: [], fait: { oui: 0, peut: 0, non: 0 }, sel: anyFilter() };
+    renderTri();
+    if (tri.showModal) tri.showModal(); else tri.setAttribute("open", "");
+  }
+  function triVote(v) {
+    if (!T || T.i >= T.queue.length) return;
+    var a = T.queue[T.i], k = myKey();
+    var card = tri.querySelector(".tcard");
+    T.hist.push({ i: T.i, a: a, prev: a[k], v: v });
+    if (v) { var ch = {}; ch[k] = v; save(a, ch, { noRender: true }); T.fait[v]++; }
+    T.i++;
+    if (card && v) { card.classList.add("go-" + v); setTimeout(renderTri, 170); } else renderTri();
+  }
+  function triUndo() {
+    if (!T || !T.hist.length) return;
+    var last = T.hist.pop(), k = myKey();
+    if (last.v) { var ch = {}; ch[k] = last.prev; save(last.a, ch, { noRender: true }); T.fait[last.v]--; }
+    T.i = last.i;
+    renderTri();
+  }
+  function renderTri() {
+    var body = clear($("triBody"));
+    var n = T.queue.length, k = myKey();
+    $("triP").textContent = "";
+    $("triP").appendChild(h("b", { class: "tab", text: nf.format(Math.min(T.i + 1, n)) }));
+    $("triP").appendChild(document.createTextNode(" / " + nf.format(n) + " sans ton vote" + (T.sel ? " (dans ta sélection)" : "")));
+    $("triBar").style.width = (n ? T.i / n * 100 : 100) + "%";
+    if (T.i >= n) {
+      body.appendChild(h("div", { class: "tri-done" },
+        h("h4", { text: n ? "Tout est trié." : "Rien à trier ici." }),
+        h("p", { text: n ? nf.format(T.fait.oui) + " oui · " + nf.format(T.fait.peut) + " peut-être · " + nf.format(T.fait.non) + " non. Tes votes sont enregistrés." : "Tu as déjà voté pour tous ces articles." }),
+        h("div", { class: "act", style: "justify-content:center;display:flex;gap:8px" },
+          T.hist.length ? h("button", { class: "btn ghost", type: "button", text: "Revenir au dernier", onclick: triUndo }) : null,
+          h("button", { class: "btn main", type: "button", text: "Fermer", onclick: function () { tri.close(); } }))));
+      return;
+    }
+    var a = T.queue[T.i], r = rubOf(a.rub), o = other(cfg.qui), ok = o === "Florian" ? "livreF" : "livreA";
+    var card = h("article", { class: "tcard" },
+      h("span", { class: "rbar", style: "background:" + r.hex }),
+      h("div", { class: "meta" }, h("span", { class: "rb" }, h("span", { class: "sw", style: "background:" + r.hex }), a.rub || "—"), h("span", { text: moisAn(a.date) }), h("span", { text: nf.format(a.mots || 0) + " mots" })),
+      h("h4", { text: a.titre }),
+      h("div", { class: "by", text: "par " + (a.auteur || "plume inconnue") }),
+      a.extrait ? h("p", { class: "ex", text: "« " + (a.extrait.length >= 318 ? a.extrait.slice(0, a.extrait.lastIndexOf(" ")).replace(/[,;:.\s]+$/, "") + "… »" : a.extrait.trim() + " »") }) : null,
+      a.noms && a.noms.length ? h("div", { class: "names" }, a.noms.slice(0, 8).map(function (nm) { return h("span", { class: "name solo", text: nm }); })) : null,
+      a[ok] ? h("div", { class: "other", text: o + " a voté : " + LV_LAB[a[ok]] }) : null,
+      h("div", { class: "lk2" }, h("a", { class: "lnk", href: docHref(a), target: "_blank", rel: "noopener", text: a.gdoc ? "Ouvrir le Doc" : "Trouver le Doc" }), a.src ? h("a", { class: "lnk", href: a.src, target: "_blank", rel: "noopener", text: "L’archive" }) : null));
+    // glisser : à droite oui, à gauche non, vers le bas peut-être
+    var x0 = null, y0 = null, dx = 0, dy = 0;
+    card.addEventListener("pointerdown", function (e) { if (e.target.closest("a")) return; x0 = e.clientX; y0 = e.clientY; dx = dy = 0; card.style.transition = "none"; });
+    card.addEventListener("pointermove", function (e) {
+      if (x0 == null) return;
+      dx = e.clientX - x0; dy = e.clientY - y0;
+      if (Math.abs(dx) > 8 || dy > 8) card.style.transform = "translate(" + dx + "px," + Math.max(0, dy) + "px) rotate(" + dx / 40 + "deg)";
+    });
+    function end() {
+      if (x0 == null) return;
+      x0 = null; card.style.transition = ""; card.style.transform = "";
+      if (dx > 90) triVote("oui"); else if (dx < -90) triVote("non"); else if (dy > 90) triVote("peut");
+    }
+    card.addEventListener("pointerup", end);
+    card.addEventListener("pointercancel", end);
+    body.appendChild(card);
+    body.appendChild(h("div", { class: "tri-btns" },
+      h("button", { type: "button", onclick: function () { triVote("non"); } }, "Non", h("small", { text: "← ou 1" })),
+      h("button", { type: "button", class: "p", onclick: function () { triVote("peut"); } }, "Peut-être", h("small", { text: "↓ ou 2" })),
+      h("button", { type: "button", class: "o", onclick: function () { triVote("oui"); } }, "Oui", h("small", { text: "→ ou 3" }))));
+    body.appendChild(h("div", { class: "tri-foot" },
+      h("button", { class: "lnk", type: "button", text: "Annuler le dernier", disabled: T.hist.length ? null : true, onclick: triUndo }),
+      h("span", { class: "small", style: "margin:0", text: "Glisse la carte, ou utilise les flèches." }),
+      h("button", { class: "lnk", type: "button", text: "Passer", onclick: function () { triVote(""); } })));
+  }
+  tri.addEventListener("keydown", function (e) {
+    if (!T) return;
+    var map = { ArrowRight: "oui", "3": "oui", o: "oui", ArrowLeft: "non", "1": "non", n: "non", ArrowDown: "peut", "2": "peut", p: "peut" };
+    if (map[e.key]) { e.preventDefault(); triVote(map[e.key]); }
+    else if (e.key === " " || e.key === "s") { e.preventDefault(); triVote(""); }
+    else if (e.key === "Backspace" || e.key === "z") { e.preventDefault(); triUndo(); }
+  });
+  tri.addEventListener("close", function () { T = null; flush(); render(); });
+
+  // ------------------------------------------------------------------ qui es-tu
+  var whoCb = null;
+  function setQui(q) {
+    cfg.qui = q; ls("qui", q);
+    setSync($("syncDot").className.replace("dot", "").trim(), $("syncTxt").textContent);
+    if ($("dlgWho").open) $("dlgWho").close();
+    render();
+    var cb = whoCb; whoCb = null;
+    if (cb) cb();
+  }
+  function askWho(cb) {
+    whoCb = cb || null;
+    document.querySelectorAll("#whoPick button").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.qui === cfg.qui ? "true" : "false"); });
+    var d = $("dlgWho");
+    if (d.showModal) d.showModal(); else d.setAttribute("open", "");
+  }
+  document.querySelectorAll("#whoPick button").forEach(function (b) { b.addEventListener("click", function () { setQui(b.dataset.qui); }); });
+  $("whoBtn").addEventListener("click", function () { askWho(); });
+
+  // ------------------------------------------------------------------ réglages
+  var dlg = $("dlg"), scriptText = "";
+  function openSettings() {
+    $("scriptUrl").value = cfg.script; $("codeIn").value = cfg.code;
+    $("dlgErr").hidden = true; $("dlgOk").hidden = true;
+    $("dlgMore").hidden = !API.on();
+    $("install").open = !API.on() && !CONF.script;
+    $("inviteWho").textContent = cfg.qui ? other(cfg.qui) : "l’autre";
+    $("dlgSave").textContent = API.on() ? "Enregistrer" : "Brancher";
+    var os = $("openSheet");
+    os.hidden = !REMOTE.sheet; if (REMOTE.sheet) os.href = REMOTE.sheet;
+    $("liensInfo").textContent = "Le script les retrouve tout seul toutes les heures" + (REMOTE.liensMaj ? " (dernière fois " + relTime(REMOTE.liensMaj) + ")" : "") + ". " +
+      nf.format(ALL.filter(function (a) { return a.gdoc; }).length) + " Docs ont leur lien.";
+    if (!scriptText) fetch("outils/script-google.gs").then(function (r) { return r.ok ? r.text() : ""; }).then(function (t) { scriptText = t; }).catch(function () {});
+    if (dlg.showModal) dlg.showModal(); else dlg.setAttribute("open", "");
+  }
+  function dlgMsg(id, txt) { $("dlgErr").hidden = true; $("dlgOk").hidden = true; var el = $(id); el.textContent = txt; el.hidden = !txt; }
+  $("settings").addEventListener("click", openSettings);
+  $("dlgSave").addEventListener("click", function () {
+    var u = $("scriptUrl").value.trim(), c = $("codeIn").value.trim().toLowerCase();
+    if (!/^https:\/\/script\.google\.com\/(a\/[^/]+\/)?macros\/s\/[^/]+\/(exec|dev)/.test(u)) { dlgMsg("dlgErr", "Il faut l’URL de l’application Web du script : elle commence par https://script.google.com/macros/s/ et finit par /exec."); return; }
+    if (!c) { dlgMsg("dlgErr", "Il manque le code d’accès (il est affiché dans le journal du script après « installer »)."); return; }
+    var old = { script: cfg.script, code: cfg.code };
+    cfg.script = u.replace(/\/dev$/, "/exec"); cfg.code = c;
+    dlgMsg("dlgOk", "Connexion…");
+    load().then(function (d) {
+      ls("script", cfg.script === CONF.script ? null : cfg.script); ls("code", cfg.code);
+      dlgMsg("dlgOk", "Branché ✓ " + plur((d && d.articles || []).length, "article") + " lus dans le Sheet.");
+      $("dlgMore").hidden = false;
+      var os = $("openSheet"); os.hidden = !REMOTE.sheet; if (REMOTE.sheet) os.href = REMOTE.sheet;
+      if (!cfg.qui) setTimeout(function () { dlg.close(); askWho(); }, 900);
+    }, function (e) {
+      cfg.script = old.script; cfg.code = old.code;
+      dlgMsg("dlgErr", e.message);
+      setSync(old.code ? "err" : "", old.code ? "Script injoignable" : "Instantané du 18/11/2026");
+    });
+  });
+  $("dlgClear").addEventListener("click", function () {
+    ls("script", null); ls("code", null);
+    cfg.script = CONF.script || ""; cfg.code = "";
+    ALL = fromSnap(); REMOTE = {}; lastLoad = 0;
+    dlg.close(); setSync("", "Instantané du 18/11/2026"); render();
+    toast("Débranché : le site affiche l’instantané.");
+  });
+  $("invite").addEventListener("click", function () {
+    var q = new URLSearchParams({ cle: cfg.code });
+    if (cfg.script !== CONF.script) q.set("script", cfg.script);
+    if (cfg.qui) q.set("qui", other(cfg.qui));
+    var url = location.origin + location.pathname + "#" + q.toString();
+    copier(url, "Lien copié. Envoie-le à " + (cfg.qui ? other(cfg.qui) : "l’autre") + " en privé.");
+  });
+  $("liensNow").addEventListener("click", function () {
+    var b = $("liensNow");
+    b.disabled = true; b.textContent = "Recherche dans le Drive… (jusqu’à une minute)";
+    load("liens").then(function (d) {
+      var l = d && d.liens;
+      toast(l ? nf.format(l.trouves) + " Docs retrouvés" + (l.manquants ? ", " + nf.format(l.manquants) + " introuvables dans le dossier" : "") + "." : "Liens à jour.", { ms: 5000 });
+      dlg.close();
+    }, function (e) { toast("Échec : " + e.message, { err: true, ms: 8000 }); })
+      .finally(function () { b.disabled = false; b.textContent = "Les retrouver maintenant"; });
+  });
+  $("copyScript").addEventListener("click", function () {
+    if (scriptText) copier(scriptText, "Script copié. Colle-le dans script.google.com.");
+    else window.open("https://raw.githubusercontent.com/amelienito/cul7ure-save/main/outils/script-google.gs", "_blank", "noopener");
+  });
+  function copier(txt, msg) {
+    (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(function () { toast(msg, { ms: 4500 }); }, function () {
+      window.prompt("Copie ceci :", txt);
+    });
+  }
+  document.querySelectorAll("dialog [data-close]").forEach(function (b) { b.addEventListener("click", function () { b.closest("dialog").close(); }); });
 
   // ------------------------------------------------------------------ branchements
   var qT;
   $("q").addEventListener("input", function (e) { clearTimeout(qT); var v = e.target.value; qT = setTimeout(function () { setF("q", v.trim()); }, 160); });
+  $("fRel").addEventListener("change", function (e) { setF("rel", e.target.value); });
+  $("fStatut").addEventListener("change", function (e) { setF("statut", e.target.value); });
+  $("fLivre").addEventListener("change", function (e) { setF("livre", e.target.value); });
   $("fAuteur").addEventListener("change", function (e) { setF("auteur", e.target.value); });
   $("fAnnee").addEventListener("change", function (e) { setF("annee", e.target.value); });
-  $("fStatut").addEventListener("change", function (e) { setF("statut", e.target.value); });
   document.querySelectorAll("[data-reset]").forEach(function (b) { b.addEventListener("click", resetAll); });
+  document.querySelectorAll("#livreCard [data-tri]").forEach(function (b) { b.addEventListener("click", openTri); });
   document.querySelectorAll("#tbl th button").forEach(function (b) {
     b.addEventListener("click", function () {
       var k = b.parentNode.dataset.k;
-      if (S.sort === k) S.dir = -S.dir; else { S.sort = k; S.dir = (k === "mots" || k === "relu" || k === "alertes") ? -1 : 1; if (k === "alertes") S.dir = 1; }
+      if (S.sort === k) S.dir = -S.dir; else { S.sort = k; S.dir = k === "relu" ? -1 : 1; }
       writeHash(); renderTable(filtered());
     });
   });
+  $("tbody").addEventListener("focusout", function () { setTimeout(function () { if (pendingRender && !editing()) render(); }, 50); });
   var rT;
   window.addEventListener("resize", function () { clearTimeout(rT); rT = setTimeout(function () { renderTimeline(); renderRubriques(); }, 120); });
   window.addEventListener("scroll", hideTip, { passive: true });
   document.addEventListener("visibilitychange", function () {
-    if (document.visibilityState === "visible" && cfg.sheetCsv && Date.now() - lastLoad > 60000) loadSheet().catch(function () {});
+    if (document.visibilityState === "hidden") { if (Object.keys(W.pending).length) flush(true); return; }
+    renderRetour();
+    if (API.on() && Date.now() - lastLoad > 45000) load().catch(function () {});
   });
-  $("refresh").addEventListener("click", function () { loadSheet().catch(function () {}); });
-
-  var dlg = $("dlg");
-  $("settings").addEventListener("click", function () {
-    $("csvUrl").value = cfg.sheetCsv; $("editUrl").value = cfg.sheetEdit; $("dlgErr").hidden = true;
-    if (dlg.showModal) dlg.showModal(); else dlg.setAttribute("open", "");
-  });
-  $("dlgCancel").addEventListener("click", function () { dlg.close(); });
-  $("dlgClear").addEventListener("click", function () {
-    try { localStorage.removeItem("cul7ure.sheetCsv"); localStorage.removeItem("cul7ure.sheetEdit"); } catch (e) {}
-    cfg = Object.assign({ sheetCsv: "", sheetEdit: "" }, window.CUL7URE_CONFIG || {});
-    ALL = SNAP.map(function (a) { return prepare(Object.assign({}, a)); }); HAS_LIVRE = false;
-    dlg.close(); setSync("", "Instantané du 18/11/2026"); render();
-    if (cfg.sheetCsv) loadSheet().catch(function () {});
-  });
-  $("dlgSave").addEventListener("click", function () {
-    var u = $("csvUrl").value.trim(), e = $("editUrl").value.trim();
-    if (u && !/^https:\/\/docs\.google\.com\/spreadsheets\//.test(u)) {
-      $("dlgErr").textContent = "Il faut l’adresse d’un Google Sheet (elle commence par https://docs.google.com/spreadsheets/).";
-      $("dlgErr").hidden = false; return;
-    }
-    if (u && /\/edit/.test(u) && !/output=csv|format=csv/.test(u)) {
-      $("dlgErr").textContent = "Ça, c’est l’adresse normale du Sheet. Il faut celle de « Publier sur le Web », au format .csv (elle se termine par output=csv).";
-      $("dlgErr").hidden = false; return;
-    }
-    cfg.sheetCsv = u; cfg.sheetEdit = e;
-    try { localStorage.setItem("cul7ure.sheetCsv", u); localStorage.setItem("cul7ure.sheetEdit", e); } catch (er) {}
-    loadSheet().then(function () { dlg.close(); }, function (er) {
-      $("dlgErr").textContent = "Impossible de lire ce Sheet : " + er.message;
-      $("dlgErr").hidden = false;
-    });
+  window.addEventListener("pagehide", function () { if (Object.keys(W.pending).length) flush(true); });
+  setInterval(function () {
+    if (document.visibilityState === "visible" && API.on() && !editing() && !(tri.open) && Date.now() - lastLoad > 170000) load().catch(function () {});
+  }, 30000);
+  $("refresh").addEventListener("click", function () { load().catch(function (e) { toast(e.message, { err: true }); }); });
+  window.addEventListener("hashchange", function () {
+    if (invitation()) { lastLoad = 0; setSync("", "Branchement…"); render(); load().catch(function (e) { toast(e.message, { err: true }); }); }
   });
 
   readHash();
   if (S.q) $("q").value = S.q;
   setSync("", "Instantané du 18/11/2026");
   render();
-  loadSheet().catch(function () {});
+  load().catch(function (e) { if (e.code) { openSettings(); dlgMsg("dlgErr", "Le code d’accès a été refusé : vérifie-le."); } });
 })();
