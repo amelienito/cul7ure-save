@@ -447,7 +447,7 @@
           h("div", {}, h("b", {}, h("span", { class: "num", text: "1" }), "Relire"), h("p", { text: "Chacun a sa liste : tu relis les textes de l’autre et une partie des autres plumes. Tu corriges, puis tu dis « C’est relu »." })),
           h("div", {}, h("b", {}, h("span", { class: "num", text: "2" }), "Voter"), h("p", { text: "Pour chaque article : oui, peut-être ou non pour le livre. Il est retenu quand vous dites oui tous les deux." })),
           h("div", {}, h("b", {}, h("span", { class: "num", text: "3" }), "Régler les problèmes"), h("p", { text: "Quelques articles sont incomplets : interviews vidéo à retranscrire, auteurs à retrouver…" }))),
-        h("div", { class: "card" },
+        cfg.script ? codeCard() : h("div", { class: "card" },
           h("h2", { class: "sec", text: "Pour commencer : brancher le site sur Google" }),
           h("p", { class: "hint", text: "À faire une seule fois, par Amélien, sur ordinateur (environ 10 minutes). Ensuite, Florian n’aura qu’à ouvrir le lien que tu lui enverras." }),
           h("button", { class: "btn main big", type: "button", text: "Brancher le site", onclick: function () { openSettings(true); } }),
@@ -523,6 +523,33 @@
       });
       root.appendChild(h("section", { class: "card", style: "margin-top:16px" }, h("h2", { class: "sec", text: "Ensuite dans ta liste" }), ul));
     }
+  }
+
+  function codeCard() {
+    var inp = h("input", { class: "inp", type: "text", placeholder: "Le code à 6 caractères", autocomplete: "off", autocapitalize: "off", spellcheck: "false", "aria-label": "Code d’accès", style: "max-width:260px" });
+    var err = h("p", { class: "note err", hidden: true });
+    function ok() {
+      var c = inp.value.trim().toLowerCase();
+      if (!c) { inp.focus(); return; }
+      cfg.code = c;
+      err.hidden = true;
+      load().then(function () {
+        ls("code", c);
+        toast("C’est branché.");
+        if (!cfg.qui) askWho(); else render(true);
+      }, function (e) {
+        cfg.code = "";
+        err.textContent = e.code ? "Ce code ne marche pas. Vérifie-le dans le journal du script." : e.message;
+        err.hidden = false;
+      });
+    }
+    inp.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); ok(); } });
+    return h("div", { class: "card" },
+      h("h2", { class: "sec", text: "Dernière étape : le code d’accès" }),
+      h("p", { class: "hint", html: "Le script est installé. Tape le code qu’il t’a donné : il est dans le <b>journal d’exécution</b> du script, sur la ligne « TON CODE D’ACCÈS ». Si tu ne le retrouves plus, relance la fonction <b>installer</b> dans script.google.com : elle réaffiche le même code." }),
+      h("div", { style: "display:flex;gap:10px;flex-wrap:wrap;align-items:center" }, inp, h("button", { class: "btn main", type: "button", text: "Valider", onclick: ok })),
+      err,
+      h("p", { class: "small", style: "margin-top:14px", text: "Florian n’aura pas à faire ça : une fois branché, envoie-lui le lien d’invitation (Réglages → Inviter l’autre)." }));
   }
 
   // ------------------------------------------------------------------ liste des articles
