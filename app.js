@@ -28,12 +28,11 @@
   };
   var ST_LAB = { "": "À relire", cours: "En cours", relu: "Relu" };
   var LV_LAB = { "": "pas voté", oui: "oui", peut: "peut-être", non: "non" };
-  var LV_SYM = { "": "·", oui: "✓", peut: "?", non: "✕" };
   var LIVRE = {
-    dedans: { lab: "Dans le livre", cls: "c-in", r: 0 },
-    discuter: { lab: "À discuter", cls: "c-disc", r: 1 },
-    attente: { lab: "Votes en attente", cls: "c-wait", r: 2 },
-    ecarte: { lab: "Écartés", cls: "c-out", r: 3 }
+    dedans: { lab: "Retenus", one: "retenu", cls: "c-in", r: 0 },
+    discuter: { lab: "À discuter", one: "à discuter", cls: "c-disc", r: 1 },
+    attente: { lab: "Il manque un vote", one: "il manque un vote", cls: "c-wait", r: 2 },
+    ecarte: { lab: "Refusés", one: "refusé", cls: "c-out", r: 3 }
   };
 
   var nf = new Intl.NumberFormat("fr-FR");
@@ -477,7 +476,7 @@
   }
 
   // ------------------------------------------------------------------ filtres
-  var STATUTS = [["", "Toute la relecture"], ["pasRelu", "Pas encore relus"], ["aRelire", "À relire"], ["cours", "En cours"], ["relu", "Relus"]];
+  var STATUTS = [["", "Relecture : tout"], ["pasRelu", "Pas encore relus"], ["aRelire", "À relire"], ["cours", "En cours"], ["relu", "Relus"]];
   var S = { q: "", rubs: [], auteur: "", annee: "", rel: "", statut: "", livre: "", alerte: "", nom: "", sort: "date", dir: 1, open: "", shown: PAGE, tocAll: false };
   function readHash() {
     var p = new URLSearchParams(location.hash.slice(1));
@@ -563,50 +562,63 @@
   }
   function hideTip() { tip.classList.remove("on"); }
 
-  // ------------------------------------------------------------------ mon espace
+  // ------------------------------------------------------------------ mon espace : les 3 étapes
+  function stepHead(n, done, title, count) {
+    return h("div", { class: "sh" },
+      h("span", { class: "num" + (done ? " done" : ""), "aria-hidden": "true" }, done ? iCheck() : String(n)),
+      h("h3", { text: title }),
+      count != null ? h("span", { class: "cnt tab", text: count }) : null);
+  }
+  function bar(v, tot, label) {
+    return h("div", { class: "bar2", role: "progressbar", "aria-label": label, "aria-valuemin": 0, "aria-valuemax": tot, "aria-valuenow": v },
+      h("i", { class: "g", style: "width:" + (tot ? v / tot * 100 : 0) + "%" }));
+  }
+  var PROB_ORDRE = ["video", "auteur", "date", "v2020", "guillemets", "court", "spam", "autre", "introuvable"];
+  var PROB_LAB = {
+    video: ["interview vidéo à retranscrire", "interviews vidéo à retranscrire"],
+    auteur: ["auteur à retrouver", "auteurs à retrouver"],
+    date: ["date à retrouver", "dates à retrouver"],
+    v2020: ["ancienne version à comparer", "anciennes versions à comparer"],
+    guillemets: ["texte aux guillemets à vérifier", "textes aux guillemets à vérifier"],
+    court: ["texte très court à compléter", "textes très courts à compléter"],
+    spam: ["texte avec du spam", "textes avec du spam"],
+    autre: ["remarque à voir", "remarques à voir"],
+    introuvable: ["article jamais archivé (piste BnF)", "articles jamais archivés (piste BnF)"]
+  };
   function renderMe() {
     var box = clear($("me"));
     if (!cfg.qui) {
-      box.appendChild(h("div", { class: "setup" },
-        h("div", { class: "hi" }, h("h2", { text: "Qui es-tu ?" }), h("span", { text: "Pour voir ta liste de relecture et voter pour le livre." })),
-        h("div", { class: "whoBtns" }, QUI.map(function (q) {
-          return h("button", { class: "btn ghost", type: "button", text: "Je suis " + q, onclick: function () { setQui(q); } });
-        }))));
+      box.appendChild(h("div", { class: "hi" }, h("h2", { text: "Comment ça marche" }), h("span", { text: "Trois étapes, chacun de son côté." })));
+      var g = h("div", { class: "how" });
+      [["Relire", "Chacun a sa liste : tu relis les textes de l’autre, et une partie des autres plumes. On corrige dans le Google Doc, puis on dit ici que c’est relu."],
+        ["Voter pour le livre", "Pour chaque article : oui, peut-être ou non. Un article va dans le livre quand vous dites oui tous les deux."],
+        ["Régler les problèmes", "Quelques articles sont incomplets (interviews vidéo, auteur inconnu…). On les règle au fil de l’eau."]]
+        .forEach(function (x, i) { g.appendChild(h("div", { class: "step" }, stepHead(i + 1, false, x[0]), h("p", { class: "sp", text: x[1] }))); });
+      box.appendChild(g);
+      box.appendChild(h("div", { class: "whoRow" }, h("b", { text: "Pour commencer, qui es-tu ?" }),
+        QUI.map(function (q) { return h("button", { class: "btn main", type: "button", text: "Je suis " + q, onclick: function () { setQui(q); } }); })));
       return;
     }
-    var mine = ALL.filter(function (a) { return !a.manquant && a.rel === cfg.qui; });
-    var relu = mine.filter(function (a) { return a.statut === "relu"; }).length;
-    var cours = mine.filter(function (a) { return a.statut === "cours"; }).length;
-    var reste = mine.length - relu;
-    var motsReste = mine.filter(function (a) { return a.statut !== "relu"; }).reduce(function (t, a) { return t + (a.mots || 0); }, 0);
+    var o = other(cfg.qui);
     box.appendChild(h("div", { class: "hi" },
-      h("h2", { text: "Salut " + cfg.qui + "." }),
-      h("span", { text: reste ? plur(reste, "article") + " à relire pour toi, environ " + Math.round(motsReste / MOTS_PAR_MIN / 60) + " h de lecture." : "Ta relecture est finie." })));
+      h("h2", { text: "Salut " + cfg.qui + ", voilà ce qu’il te reste à faire." }),
+      h("span", { text: "Tu relis les textes d’" + o + " et une partie des autres plumes. " + o + " relit les tiens." })));
     if (!API.on()) {
-      box.appendChild(h("div", { class: "next", style: "margin:0 0 16px" },
+      box.appendChild(h("div", { class: "next", style: "margin:0 0 14px" },
         h("div", {}, h("div", { class: "k", text: "Pas encore branché" }), h("div", { class: "m", style: "font-size:14.5px;color:var(--soft)", text: "Tu vois ta liste, mais rien ne s’enregistre tant que le site n’est pas branché sur le Sheet." })),
         h("button", { class: "btn main", type: "button", text: "Brancher", onclick: openSettings })));
     }
-    var cols = h("div", { class: "cols" });
-    // relecture
+    var steps = h("div", { class: "steps" });
+
+    // 1. relire
+    var mine = ALL.filter(function (a) { return !a.manquant && a.rel === cfg.qui; });
+    var relu = mine.filter(function (a) { return a.statut === "relu"; }).length;
     var q = myQueue(), first = q[0];
-    var b1 = h("div", { class: "mebox" },
-      h("h3", { text: "Ta relecture" }),
-      h("div", { class: "big" }, h("b", { class: "tab", text: nf.format(relu) }), h("span", { text: "/ " + nf.format(mine.length) + " relus · " + pct(relu, mine.length) + " %" })),
-      h("div", { class: "bar2", role: "progressbar", "aria-valuemin": 0, "aria-valuemax": mine.length, "aria-valuenow": relu, "aria-label": "Ta relecture" },
-        h("i", { class: "g", style: "width:" + (mine.length ? relu / mine.length * 100 : 0) + "%" }),
-        h("i", { class: "l", style: "width:" + (mine.length ? cours / mine.length * 100 : 0) + "%" })),
-      h("div", { class: "leg2" },
-        h("span", {}, h("i", { style: "background:var(--st-good)" }), plur(relu, "relu")),
-        h("span", {}, h("i", { style: "background:var(--lilac)" }), nf.format(cours) + " en cours"),
-        h("span", {}, h("i", { style: "background:var(--accent-track)" }), nf.format(reste - cours) + " à relire")));
+    var s1 = h("section", { class: "step wide", "aria-label": "Étape 1 : relire tes articles" },
+      stepHead(1, mine.length && !q.length, "Relire tes articles", nf.format(relu) + " / " + nf.format(mine.length) + " relus"),
+      h("p", { class: "sp", text: "Ouvre le Doc, corrige les fautes et vérifie la mise en forme (guillemets « », artistes en gras, titres d’œuvres en italique). Puis reviens ici dire que c’est relu." }),
+      bar(relu, mine.length, "Ta relecture"));
     if (first) {
-      b1.appendChild(h("div", { class: "next" },
-        h("div", {},
-          h("div", { class: "k", text: first.statut === "cours" ? "À reprendre" : "Le prochain" }),
-          h("div", { class: "t", text: first.titre }),
-          h("div", { class: "m", text: [first.rub, moisAn(first.date), first.auteur, "≈ " + minLecture(first) + " min"].filter(Boolean).join(" · ") })),
-        docLink(first, "btn main", first.statut === "cours" ? "Reprendre" : "Ouvrir le Doc")));
       var ul = h("ul", { class: "queue" });
       q.slice(1, 5).forEach(function (a) {
         ul.appendChild(h("li", {},
@@ -618,33 +630,54 @@
               save(a, { statut: "relu" }, { msg: "« " + a.titre + " » relu ✓", undo: function () { save(a, { statut: prev }); } });
             } }, iCheck(), "Relu"))));
       });
-      b1.appendChild(ul);
-      b1.appendChild(h("div", { class: "metrail" },
-        h("button", { class: "lnk", type: "button", text: "Voir toute ma liste (" + reste + ")", onclick: function () { setMany({ rel: cfg.qui, statut: "pasRelu", livre: "" }, "articles"); } }),
-        relu ? h("button", { class: "lnk", type: "button", text: "Ce que j’ai relu", onclick: function () { setMany({ rel: cfg.qui, statut: "relu", livre: "" }, "articles"); } }) : null));
+      s1.appendChild(h("div", { class: "s1grid" },
+        h("div", { class: "next" },
+          h("div", {},
+            h("div", { class: "k", text: first.statut === "cours" ? "À reprendre" : "Le prochain" }),
+            h("div", { class: "t", text: first.titre }),
+            h("div", { class: "m", text: [first.rub, moisAn(first.date), first.auteur, "≈ " + minLecture(first) + " min de lecture"].filter(Boolean).join(" · ") })),
+          docLink(first, "btn main", first.statut === "cours" ? "Reprendre" : "Ouvrir le Doc")),
+        h("div", {}, q.length > 1 ? h("div", { class: "k2", text: "Ensuite" }) : null, ul,
+          h("button", { class: "lnk", type: "button", style: "margin-top:8px", text: "Voir toute ma liste (" + q.length + ")", onclick: function () { setMany({ rel: cfg.qui, statut: "pasRelu", livre: "", alerte: "" }, "articles"); } }))));
     } else {
-      b1.appendChild(h("p", { class: "empty-s", style: "margin-top:14px", text: mine.length ? "Tout est relu. Champagne." : "Aucun article ne t’est attribué." }));
+      s1.appendChild(h("p", { class: "sp", text: mine.length ? "Tout est relu. Champagne." : "Aucun article ne t’est attribué." }));
     }
-    cols.appendChild(b1);
-    // votes
+    steps.appendChild(s1);
+
+    // 2. voter
     var k = myKey(), arts = ALL.filter(function (a) { return !a.manquant; });
     var sans = arts.filter(function (a) { return !a[k]; }).length;
-    var dedans = arts.filter(function (a) { return a.livre === "dedans"; });
+    var retenus = arts.filter(function (a) { return a.livre === "dedans"; });
     var disc = arts.filter(function (a) { return a.livre === "discuter"; }).length;
-    var mesOui = arts.filter(function (a) { return a[k] === "oui"; }).length;
-    var pg = dedans.reduce(function (t, a) { return t + pages(a.mots); }, 0);
-    var b2 = h("div", { class: "mebox" },
-      h("h3", { text: "Tes votes pour le livre" }),
-      h("div", { class: "big" }, h("b", { class: "tab", text: nf.format(sans) }), h("span", { text: sans ? (sans > 1 ? "articles attendent ton vote" : "article attend ton vote") : "Tous tes votes sont faits." })),
-      h("div", { class: "metrail" },
-        sans ? h("button", { class: "btn main", type: "button", "data-tri": "", onclick: openTri }, "Lancer le tri rapide") : null,
-        h("button", { class: "lnk", type: "button", text: "Voir le livre", onclick: function () { $("livreCard").scrollIntoView({ behavior: "smooth", block: "start" }); } })),
-      h("div", { class: "vstat" },
-        h("button", { type: "button", onclick: function () { setMany({ livre: "dedans", rel: "", statut: "" }, "articles"); } }, h("b", { class: "tab", text: nf.format(dedans.length) }), h("span", { text: "dans le livre · ≈ " + nf.format(pg) + " p." })),
-        h("button", { type: "button", onclick: function () { setMany({ livre: "discuter", rel: "", statut: "" }, "articles"); } }, h("b", { class: "tab", text: nf.format(disc) }), h("span", { text: "à discuter avec " + other(cfg.qui) })),
-        h("div", {}, h("b", { class: "tab", text: nf.format(mesOui) }), h("span", { text: "de tes oui" }))));
-    cols.appendChild(b2);
-    box.appendChild(cols);
+    var pg = retenus.reduce(function (t, a) { return t + pages(a.mots); }, 0);
+    var s2 = h("section", { class: "step", "aria-label": "Étape 2 : voter pour le livre" },
+      stepHead(2, !sans, "Dire ce que tu veux dans le livre", nf.format(arts.length - sans) + " / " + nf.format(arts.length) + " votés"),
+      h("p", { class: "sp", text: "Pour chaque article : oui, peut-être ou non. Pas besoin de relire en entier, le titre et l’extrait suffisent souvent. Un article est retenu quand vous dites oui tous les deux." }),
+      bar(arts.length - sans, arts.length, "Tes votes"),
+      h("div", { class: "row2" },
+        sans ? h("button", { class: "btn main", type: "button", onclick: openTri }, "Voter (" + nf.format(sans) + " restants)") : h("span", { class: "sp", text: "Tous tes votes sont faits." })),
+      h("div", { class: "facts2" },
+        h("button", { class: "lnk", type: "button", text: "Retenus pour l’instant : " + nf.format(retenus.length) + " (≈ " + nf.format(pg) + " pages)", onclick: function () { $("livreCard").scrollIntoView({ behavior: "smooth", block: "start" }); } }),
+        disc ? h("button", { class: "lnk", type: "button", text: "À discuter avec " + o + " : " + nf.format(disc), onclick: function () { setMany({ livre: "discuter", rel: "", statut: "", alerte: "" }, "articles"); } }) : null));
+    steps.appendChild(s2);
+
+    // 3. problèmes
+    var c = {}, nProb = 0;
+    arts.concat(ALL.filter(function (a) { return a.manquant; })).forEach(function (a) {
+      if (a.tags.length) nProb++;
+      a.tags.forEach(function (t) { c[t] = (c[t] || 0) + 1; });
+    });
+    var s3 = h("section", { class: "step", "aria-label": "Étape 3 : régler les problèmes" },
+      stepHead(3, !nProb, "Régler les problèmes", plur(nProb, "article")),
+      h("p", { class: "sp", text: "Des articles incomplets ou à vérifier. Pas de répartition : prends-en un quand tu as un moment, ouvre-le dans la liste et clique « C’est réglé »." }));
+    var pl = h("ul", { class: "plist" });
+    PROB_ORDRE.filter(function (t) { return c[t]; }).slice(0, 5).forEach(function (t) {
+      pl.appendChild(h("li", {}, h("button", { type: "button", onclick: function () { setMany({ alerte: t, rel: "", statut: "", livre: "" }, "articles"); } },
+        icon(TAGS[t].st, 18), h("span", {}, h("b", { class: "tab", text: c[t] }), " " + PROB_LAB[t][c[t] > 1 ? 1 : 0]), h("span", { class: "go", text: "Voir" }))));
+    });
+    if (nProb) s3.appendChild(pl); else s3.appendChild(h("p", { class: "sp", text: "Plus aucun problème. Bravo." }));
+    steps.appendChild(s3);
+    box.appendChild(steps);
   }
 
   // ------------------------------------------------------------------ filtres
@@ -659,9 +692,9 @@
       opts.forEach(function (o) { el.appendChild(h("option", { value: o[0], text: o[1] })); });
       el.value = val; el.classList.toggle("on", !!val);
     }
-    fill("fRel", [["", "Tous les relecteurs"], ["Florian", "Pour Florian"], ["Amélien", "Pour Amélien"]], S.rel);
+    fill("fRel", [["", "Relecteur : tous"], ["Florian", "Relecteur : Florian"], ["Amélien", "Relecteur : Amélien"]], S.rel);
     fill("fStatut", STATUTS, S.statut);
-    fill("fLivre", [["", "Livre : tout"], ["dedans", "Dans le livre"], ["discuter", "À discuter"], ["attente", "Votes en attente"], ["ecarte", "Écartés"]]
+    fill("fLivre", [["", "Livre : tout"], ["dedans", "Retenus"], ["discuter", "À discuter"], ["attente", "Il manque un vote"], ["ecarte", "Refusés"]]
       .concat(cfg.qui ? [["sansMoi", "Sans mon vote"]] : []), S.livre);
     var aus = {};
     ALL.forEach(function (a) { if (!a.manquant) { var k = a.auteur || "(non signé)"; aus[k] = (aus[k] || 0) + 1; } });
@@ -699,8 +732,8 @@
     }
     tile("Articles", nf.format(arts.length), "", manq ? "+ " + plur(manq, "introuvable") : "tous récupérés");
     tile("Relus", nf.format(relu), "/ " + nf.format(arts.length), parQui.join(" · "));
-    tile("Dans le livre", nf.format(dedans.length), "", "≈ " + nf.format(dedans.reduce(function (t, a) { return t + pages(a.mots); }, 0)) + " pages · " + nf.format(disc) + " à discuter");
-    tile("À traiter", nf.format(todo), "", todo ? plur(todo, "article") + " avec une alerte" : "rien à signaler", todo ? icon("serious", 22) : icon("good", 22));
+    tile("Retenus pour le livre", nf.format(dedans.length), "", "≈ " + nf.format(dedans.reduce(function (t, a) { return t + pages(a.mots); }, 0)) + " pages · " + nf.format(disc) + " à discuter");
+    tile("Problèmes à régler", nf.format(todo), "", todo ? plur(todo, "article") + " concerné" + (todo > 1 ? "s" : "") : "rien à signaler", todo ? icon("serious", 22) : icon("good", 22));
     tile("Mots", nfc.format(mots), "", "≈ " + nf.format(Math.round(mots / MOTS_PAR_PAGE)) + " pages si on gardait tout");
   }
 
@@ -767,10 +800,10 @@
     var sansMoi = k ? list.filter(function (a) { return !a[k]; }).length : 0;
     var bs = clear($("bstats"));
     var subs = {
-      dedans: "≈ " + nf.format(pg) + " pages",
+      dedans: "oui + oui · ≈ " + nf.format(pg) + " pages",
       discuter: "vous n’êtes pas d’accord",
-      attente: k ? "dont " + nf.format(sansMoi) + " sans ton vote" : "il manque un vote",
-      ecarte: "non tous les deux"
+      attente: k ? "dont " + nf.format(sansMoi) + " sans ton vote" : "l’un de vous n’a pas voté",
+      ecarte: "non + non"
     };
     ["dedans", "discuter", "attente", "ecarte"].forEach(function (key) {
       bs.appendChild(h("button", { class: "bstat" + (S.livre === key ? " on" : ""), type: "button", "aria-pressed": S.livre === key ? "true" : "false",
@@ -1018,13 +1051,13 @@
     var st = a.statut;
     return h("span", { class: "rst" + (st === "relu" ? " relu" : st === "cours" ? " cours" : ""),
       title: (st === "relu" ? "Relu par " + a.rel + (a.reluLe ? " le " + dateFr(a.reluLe.slice(0, 10)) : "") : st === "cours" ? "En cours chez " + a.rel : "À relire par " + a.rel) },
-      icon(st === "relu" ? "good" : st === "cours" ? "cours" : "todo", 16), a.rel);
+      icon(st === "relu" ? "good" : st === "cours" ? "cours" : "todo", 16), a.rel, h("small", { text: st === "relu" ? "relu" : st === "cours" ? "en cours" : "à relire" }));
   }
   function votesCell(a) {
-    if (a.manquant) return h("span", { class: "miss", text: "—" });
-    return h("span", { class: "votes" }, [["F", "Florian", a.livreF], ["A", "Amélien", a.livreA]].map(function (v) {
-      return h("span", { class: "vt " + v[2], title: v[1] + " : " + LV_LAB[v[2]], text: v[0] + LV_SYM[v[2]] });
-    }));
+    if (a.manquant || !a.livre) return h("span", { class: "miss", text: "—" });
+    var txt = LIVRE[a.livre].lab.replace(/s$/, "");
+    if (a.livre === "attente") txt = !a.livreF && !a.livreA ? "Pas encore voté" : "Il manque " + (!a.livreF ? "Florian" : "Amélien");
+    return h("span", { class: "lv", title: "Florian : " + LV_LAB[a.livreF] + " · Amélien : " + LV_LAB[a.livreA] }, h("i", { class: "sw " + LIVRE[a.livre].cls }), txt);
   }
   function editing() {
     var el = document.activeElement;
@@ -1105,7 +1138,7 @@
       right.appendChild(h("div", {}, sel));
       right.appendChild(h("div", { class: "dl", text: "Livre" }));
       if (k) right.appendChild(voteSeg(a));
-      right.appendChild(h("div", { class: "small", text: "Florian : " + LV_LAB[a.livreF] + " · Amélien : " + LV_LAB[a.livreA] + (a.livre ? " → " + LIVRE[a.livre].lab.toLowerCase() : "") }));
+      right.appendChild(h("div", { class: "small", text: "Florian : " + LV_LAB[a.livreF] + " · Amélien : " + LV_LAB[a.livreA] + (a.livre ? " → " + LIVRE[a.livre].one : "") }));
       if (!k) right.appendChild(h("button", { class: "lnk", type: "button", text: "Dis qui tu es pour voter", style: "justify-self:start;margin-top:6px", onclick: function (e) { e.stopPropagation(); askWho(); } }));
     }
     right.appendChild(h("div", { class: "dl", text: "Infos" }));

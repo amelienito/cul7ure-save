@@ -10,7 +10,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2307061A'/%3E%3Ctext x='32' y='45' font-family='Georgia,serif' font-style='italic' font-weight='700' font-size='38' text-anchor='middle' fill='%23c9c4ff'%3E7%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..900;1,6..96,400..900&family=Mona+Sans:ital,wdth,wght@0,75..125,200..900;1,75..125,200..900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,800&family=Mona+Sans:wdth,wght@75..125,200..900&display=swap">
 <style>
 :root{
   color-scheme:dark;
@@ -53,7 +53,7 @@ a{color:inherit}
 /* ---------- haut ---------- */
 .top{display:flex;align-items:center;gap:14px;padding:18px 0 6px}
 .brand{display:flex;align-items:baseline;gap:10px;text-decoration:none}
-.brand .w{font-family:var(--serif);font-style:italic;font-weight:800;font-size:30px;line-height:1;letter-spacing:-.01em;background:var(--chrome);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 14px rgba(160,170,255,.45));padding-right:.08em}
+.brand .w{font-family:var(--serif);font-weight:800;font-size:30px;line-height:1;letter-spacing:-.01em;background:var(--chrome);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 14px rgba(160,170,255,.45));padding-right:.08em}
 .brand .s{font-size:11px;font-weight:800;font-stretch:115%;letter-spacing:.22em;text-transform:uppercase;color:var(--muted)}
 .sync{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--muted);flex-wrap:wrap;justify-content:flex-end}
 @media (max-width:640px){.top{flex-wrap:wrap}.sync{margin-left:0;width:100%;justify-content:flex-start}}
@@ -70,7 +70,7 @@ a{color:inherit}
 /* ---------- intro ---------- */
 .hero{padding:26px 0 18px}
 .eyebrow{margin:0 0 8px;font-size:12.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);font-weight:700}
-.hero h1{margin:0;font-family:var(--serif);font-style:italic;font-weight:600;font-size:clamp(34px,5vw,58px);line-height:1;letter-spacing:-.025em;text-wrap:balance}
+.hero h1{margin:0;font-weight:800;font-stretch:105%;font-size:clamp(30px,4.4vw,50px);line-height:1.05;letter-spacing:-.03em;text-wrap:balance}
 .hero h1 b{font-weight:800;background:var(--holo);background-size:220% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:holo 9s linear infinite}
 @keyframes holo{to{background-position:220% 0}}
 .hero p.sub{margin:12px 0 0;max-width:62ch;font-size:16px;line-height:1.5;color:var(--soft)}
@@ -78,15 +78,16 @@ a{color:inherit}
 /* ---------- cartes ---------- */
 .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;margin-top:8px}
 .card{grid-column:span 12;position:relative;border-radius:var(--r);background:linear-gradient(180deg,rgba(26,23,70,.92),rgba(18,16,54,.92));border:1px solid var(--line);padding:20px 22px;min-width:0;transition:opacity .25s}
-.card h2{margin:0;font-family:var(--serif);font-style:italic;font-weight:600;font-size:25px;line-height:1.15;letter-spacing:-.01em}
+.card h2{margin:0;font-weight:800;font-size:22px;line-height:1.2;letter-spacing:-.01em}
 .card h3{margin:0 0 10px;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:800}
-.card .hint{margin:5px 0 0;font-size:14.5px;color:var(--soft);line-height:1.5}
+.card .hint{margin:5px 0 0;font-size:14.5px;color:var(--soft);line-height:1.5;max-width:90ch}
+.card .hint b{color:var(--ink)}
 .card .head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap}
 .s4{grid-column:span 4}.s5{grid-column:span 5}.s6{grid-column:span 6}.s7{grid-column:span 7}.s8{grid-column:span 8}
 @media (max-width:980px){.s4,.s5,.s6,.s7,.s8{grid-column:span 12}}
 .loading .card{opacity:.6}
 .section{grid-column:span 12;margin:26px 0 -4px;display:flex;align-items:baseline;gap:12px}
-.section h2{margin:0;font-family:var(--serif);font-style:italic;font-weight:600;font-size:30px;letter-spacing:-.015em}
+.section h2{margin:0;font-weight:800;font-size:24px;letter-spacing:-.015em}
 .section p{margin:0;color:var(--muted);font-size:14.5px}
 
 /* boutons */
@@ -104,12 +105,35 @@ a{color:inherit}
 /* ---------- mon espace ---------- */
 .me{margin:6px 0 18px;border-radius:26px;padding:22px 24px;background:linear-gradient(135deg,rgba(54,46,140,.55),rgba(26,23,70,.9) 55%);border:1px solid var(--line2);box-shadow:0 20px 60px rgba(0,0,0,.25)}
 .me .hi{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:16px}
-.me .hi h2{margin:0;font-family:var(--serif);font-style:italic;font-weight:600;font-size:28px}
+.me .hi h2{margin:0;font-weight:800;font-size:26px;letter-spacing:-.015em}
 .me .hi span{color:var(--muted);font-size:14.5px}
-.me .cols{display:grid;grid-template-columns:1.25fr 1fr;gap:16px}
-@media (max-width:860px){.me .cols{grid-template-columns:1fr}}
-.mebox{border-radius:18px;background:rgba(7,6,26,.38);border:1px solid var(--line);padding:18px;min-width:0}
-.mebox h3{margin:0 0 10px;font-size:13px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:800}
+.steps{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.how{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.step{border-radius:18px;background:rgba(7,6,26,.38);border:1px solid var(--line);padding:18px;min-width:0;display:flex;flex-direction:column;gap:12px}
+.step.wide{grid-column:span 2}
+@media (max-width:860px){.steps,.how{grid-template-columns:1fr}.step.wide{grid-column:auto}}
+.sh{display:flex;align-items:center;gap:12px}
+.sh h3{margin:0;font-size:19px;font-weight:800;letter-spacing:-.01em;flex:1;min-width:0;line-height:1.25}
+.sh .cnt{font-size:15px;font-weight:800;color:var(--soft);white-space:nowrap}
+@media (max-width:640px){.sh .cnt{font-size:13px}}
+.num{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--ink);color:var(--night);font-weight:900;font-size:16px;flex:none}
+.num.done{background:var(--st-good);color:#fff}
+.num svg{width:16px;height:16px}
+.sp{margin:0;font-size:15px;line-height:1.55;color:var(--soft);max-width:75ch}
+.step .bar2{margin:0}
+.s1grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+@media (max-width:860px){.s1grid{grid-template-columns:1fr}}
+.s1grid .next{margin:0}
+.k2{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:800;margin-bottom:2px}
+.row2{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.facts2{display:grid;gap:6px;justify-items:start}
+.plist{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.plist button{width:100%;display:grid;grid-template-columns:20px 1fr auto;gap:10px;align-items:center;text-align:left;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:rgba(7,6,26,.3);font-size:14.5px;font-weight:600;color:var(--soft)}
+.plist button:hover{border-color:var(--line2);color:var(--ink)}
+.plist b{font-weight:800;color:var(--ink)}
+.plist .go{font-size:13px;font-weight:800;color:var(--lilac)}
+.whoRow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:16px}
+.whoRow b{font-size:16px;margin-right:6px}
 .big{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
 .big b{font-size:44px;font-weight:800;font-stretch:108%;letter-spacing:-.03em;line-height:1}
 .big span{font-size:15px;color:var(--soft)}
@@ -122,10 +146,10 @@ a{color:inherit}
 .leg2 i{width:10px;height:10px;border-radius:3px;display:inline-block}
 .next{margin-top:16px;display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:14px 16px;border-radius:16px;background:var(--raise);border:1px solid var(--line2)}
 .next .k{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--lilac);font-weight:800}
-.next .t{margin-top:4px;font-family:var(--serif);font-style:italic;font-weight:600;font-size:21px;line-height:1.2}
+.next .t{margin-top:4px;font-weight:800;font-size:19px;line-height:1.25}
 .next .m{margin-top:4px;font-size:13.5px;color:var(--muted)}
 @media (max-width:560px){.next{grid-template-columns:1fr}.next .btn{width:100%}}
-.queue{margin:12px 0 0;padding:0;list-style:none;display:grid;gap:2px}
+.queue{margin:0;padding:0;list-style:none;display:grid;gap:2px}
 .queue li{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:8px 4px;border-bottom:1px solid var(--line);font-size:14.5px}
 .queue li:last-child{border-bottom:0}
 .queue .qt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:650}
@@ -135,12 +159,6 @@ a{color:inherit}
 .mini-btn:hover{border-color:var(--lilac);color:var(--ink)}
 .mini-btn svg{width:13px;height:13px}
 .mini-btn.ok:hover{border-color:var(--st-good);color:#8fe58f}
-.metrail{margin-top:14px;display:flex;gap:14px;flex-wrap:wrap;align-items:center}
-.vstat{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
-.vstat button,.vstat div{text-align:left;padding:10px 12px;border-radius:14px;border:1px solid var(--line);background:rgba(7,6,26,.3)}
-.vstat button:hover{border-color:var(--line2)}
-.vstat b{display:block;font-size:22px;font-weight:800}
-.vstat span{font-size:12.5px;color:var(--muted)}
 .setup{display:grid;gap:12px;justify-items:start}
 .setup p{margin:0;font-size:15px;line-height:1.55;color:var(--soft);max-width:70ch}
 .whoBtns{display:flex;gap:10px;flex-wrap:wrap}
@@ -223,7 +241,7 @@ button.bstat:hover{border-color:var(--line2)}
 .blist .bt{font-weight:700;font-size:14.5px;line-height:1.3}
 .blist .bm{font-size:12.5px;color:var(--muted);margin-top:3px}
 .toc{margin:0;padding:0;list-style:none;font-size:14px}
-.toc .ty{font-family:var(--serif);font-style:italic;font-weight:700;font-size:19px;margin:14px 0 6px;display:flex;justify-content:space-between;align-items:baseline}
+.toc .ty{font-weight:800;font-size:17px;margin:14px 0 6px;display:flex;justify-content:space-between;align-items:baseline}
 .toc .ty:first-child{margin-top:0}
 .toc .ty span{font-family:var(--sans);font-style:normal;font-size:12.5px;font-weight:600;color:var(--muted)}
 .toc li.it{display:grid;grid-template-columns:1fr auto;gap:12px;padding:4px 0;color:var(--soft);border-bottom:1px dotted var(--line)}
@@ -318,15 +336,17 @@ details.nums[open] summary::before{content:'－ '}
 .rb{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;color:var(--soft);font-weight:600}
 .rst{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;font-size:14px;color:var(--soft);font-weight:650}
 .rst .ic{width:16px;height:16px}
+.rst small{font-size:12.5px;font-weight:600;color:var(--muted)}
+.lv{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;font-size:14px;color:var(--soft);font-weight:600}
 .rst.relu{color:#9ee89e}
 .rst.cours{color:var(--lilac)}
 .al{display:inline-flex;gap:4px;vertical-align:middle}
 .al .ic{width:19px;height:19px}
-.miss{color:var(--muted);font-style:italic}
+.miss{color:var(--muted)}
 .det td{padding:0 22px 20px;background:rgba(142,155,255,.08)}
 .detail{display:grid;grid-template-columns:1fr 340px;gap:26px;padding-top:6px}
 @media (max-width:860px){.detail{grid-template-columns:1fr}}
-.ex{margin:0;font-family:var(--serif);font-size:18px;line-height:1.55;color:var(--soft);font-style:italic}
+.ex{margin:0;font-size:16px;line-height:1.6;color:var(--soft);padding-left:14px;border-left:3px solid var(--line2)}
 .dl{font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:18px 0 9px}
 .dl:first-child{margin-top:0}
 .acts{display:grid;gap:4px;align-content:start}
@@ -349,7 +369,7 @@ details.nums[open] summary::before{content:'－ '}
 /* dialogues */
 dialog{max-width:600px;width:calc(100% - 32px);border-radius:24px;border:1px solid var(--line2);background:#110F33;color:var(--ink);padding:24px;max-height:calc(100vh - 32px);overflow:auto}
 dialog::backdrop{background:rgba(4,3,16,.72);backdrop-filter:blur(4px)}
-dialog h3{margin:0 0 6px;font-family:var(--serif);font-style:italic;font-weight:600;font-size:27px}
+dialog h3{margin:0 0 6px;font-weight:800;font-size:24px;letter-spacing:-.01em}
 dialog ol{margin:10px 0;padding-left:20px;color:var(--soft);font-size:14.5px;line-height:1.6}
 dialog ol li{margin:4px 0}
 dialog label.fl{display:block;font-size:13px;font-weight:700;color:var(--muted);margin:14px 0 6px}
@@ -363,7 +383,7 @@ dialog details summary{cursor:pointer;font-weight:800;font-size:14.5px;color:var
 .okc{color:#9ee89e}
 code{font-size:.92em;background:rgba(255,255,255,.07);padding:1px 5px;border-radius:5px}
 .whoPick{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
-.whoPick button{height:76px;border-radius:18px;border:1px solid var(--line2);font-family:var(--serif);font-style:italic;font-weight:700;font-size:24px;background:rgba(7,6,26,.4)}
+.whoPick button{height:76px;border-radius:18px;border:1px solid var(--line2);font-weight:800;font-size:22px;background:rgba(7,6,26,.4)}
 .whoPick button:hover,.whoPick button[aria-pressed="true"]{border-color:var(--soft);background:var(--raise)}
 
 /* tri rapide */
@@ -377,9 +397,9 @@ code{font-size:.92em;background:rgba(255,255,255,.07);padding:1px 5px;border-rad
 .tcard{margin:16px 20px 0;border-radius:22px;border:1px solid var(--line2);background:linear-gradient(180deg,#1C1850,#141140);padding:22px;touch-action:pan-y;transition:transform .25s var(--ease),opacity .25s;position:relative;overflow:hidden}
 .tcard .rbar{position:absolute;left:0;top:0;bottom:0;width:5px}
 .tcard .meta{display:flex;gap:10px;align-items:center;font-size:13.5px;color:var(--muted);font-weight:650;flex-wrap:wrap}
-.tcard h4{margin:10px 0 0;font-family:var(--serif);font-style:italic;font-weight:600;font-size:clamp(25px,4.4vw,34px);line-height:1.12;letter-spacing:-.01em}
+.tcard h4{margin:10px 0 0;font-weight:800;font-size:clamp(22px,3.6vw,30px);line-height:1.18;letter-spacing:-.015em}
 .tcard .by{margin-top:8px;font-size:15px;color:var(--soft)}
-.tcard .ex{margin-top:16px;font-size:17px}
+.tcard .ex{margin-top:16px;font-size:16px}
 .tcard .names{margin-top:14px}
 .tcard .other{margin-top:14px;font-size:14px;color:var(--soft)}
 .tcard .lk2{margin-top:14px;display:flex;gap:14px;flex-wrap:wrap}
@@ -395,13 +415,13 @@ code{font-size:.92em;background:rgba(255,255,255,.07);padding:1px 5px;border-rad
 .tri-btns .p{border-color:var(--lilac);color:var(--lilac)}
 .tri-foot{display:flex;justify-content:space-between;align-items:center;padding:6px 20px 18px;gap:10px;flex-wrap:wrap}
 .tri-done{padding:40px 24px;text-align:center}
-.tri-done h4{margin:0;font-family:var(--serif);font-style:italic;font-size:30px}
+.tri-done h4{margin:0;font-weight:800;font-size:26px}
 .tri-done p{color:var(--soft)}
 
 /* retour d'un Doc + messages */
 .retour{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:70;width:min(640px,calc(100% - 24px));border-radius:22px;border:1px solid var(--soft);background:rgba(20,17,64,.97);box-shadow:0 18px 60px rgba(0,0,0,.55);padding:16px 18px;display:grid;gap:12px}
 .retour .q{font-size:15.5px;line-height:1.4;padding-right:30px}
-.retour .q b{font-family:var(--serif);font-style:italic;font-size:18px}
+.retour .q b{font-weight:800}
 .retour .r{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .retour .r .lab{font-size:13px;color:var(--muted);font-weight:700;margin-right:2px}
 .retour .x{position:absolute;right:12px;top:10px;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;color:var(--muted);font-size:20px}
@@ -419,7 +439,9 @@ footer a{color:var(--muted)}
   .hero .eyebrow{display:none}
   .hero p.sub{display:none}
   .me{padding:16px 14px;border-radius:22px}
-  .mebox{padding:14px}
+  .step{padding:14px}
+  .sh h3{font-size:17.5px}
+  .me .hi h2{font-size:22px}
   .big b{font-size:38px}
   .card{padding:18px 16px}
   .tablecard{padding:8px 0 4px}
@@ -490,33 +512,34 @@ footer a{color:var(--muted)}
   <main class="grid" id="grid">
     <div class="kpis" id="kpis"></div>
 
-    <section class="card s7" aria-labelledby="t-todo">
-      <div class="head"><div><h2 id="t-todo">À traiter en priorité</h2><p class="hint">Les cas les plus urgents en premier. Clique une ligne pour ne voir que ces articles.</p></div></div>
+    <section class="card s7" aria-labelledby="t-todo" id="todoCard">
+      <div class="head"><div><h2 id="t-todo">Les problèmes à régler</h2><p class="hint">Les plus graves en premier. Clique un type de problème pour voir les articles concernés.</p></div></div>
       <div class="todo" id="todo"></div>
     </section>
 
     <section class="card s5" aria-labelledby="t-relecture">
-      <div class="head"><div><h2 id="t-relecture">La relecture</h2><p class="hint">Répartition croisée : chacun relit les textes de l’autre, et les autres plumes à parts égales.</p></div></div>
+      <div class="head"><div><h2 id="t-relecture">Où en est la relecture</h2><p class="hint">Florian relit les textes d’Amélien, Amélien ceux de Florian, et les autres plumes sont partagées à parts égales.</p></div></div>
       <div class="who" id="relWho"></div>
       <ul class="feed" id="feed"></ul>
     </section>
 
     <section class="card" aria-labelledby="t-livre" id="livreCard">
       <div class="head">
-        <div><h2 id="t-livre">Le livre</h2><p class="hint">Dans l’ordre chronologique. Un article entre quand vous votez oui tous les deux.</p></div>
-        <button class="btn ghost sm" type="button" data-tri>Voter en tri rapide</button>
+        <div><h2 id="t-livre">Le livre</h2><p class="hint">Un article est <b>retenu</b> quand vous votez oui tous les deux, <b>refusé</b> quand c’est non pour les deux. Si vos votes diffèrent, il est <b>à discuter</b>. S’il manque le vote de l’un de vous, il attend.</p></div>
+        <button class="btn ghost sm" type="button" data-tri>Voter</button>
       </div>
       <div class="bstats" id="bstats"></div>
-      <div class="years" id="years"></div>
+      <h3 style="margin-top:20px">Par année</h3>
+      <div class="years" id="years" style="margin-top:0"></div>
       <div class="legend" id="yLegend"></div>
       <div class="bcols">
         <div><h3>À discuter</h3><ul class="blist" id="discuter"></ul></div>
-        <div><h3>Le sommaire</h3><ul class="toc" id="toc"></ul></div>
+        <div><h3>Le sommaire (dans l’ordre de parution)</h3><ul class="toc" id="toc"></ul></div>
       </div>
     </section>
 
     <section class="card tablecard" aria-labelledby="t-articles" id="articles">
-      <div class="head"><div><h2 id="t-articles">Les articles</h2><p class="hint">Clique un article pour ouvrir son Doc, le marquer relu, voter ou laisser une note.</p></div></div>
+      <div class="head"><div><h2 id="t-articles">Tous les articles</h2><p class="hint">Clique un article pour ouvrir son Doc, le marquer relu, voter ou laisser une note. Les filtres en haut permettent de n’afficher que ce qui t’intéresse.</p></div></div>
       <div style="overflow-x:auto">
         <table class="tbl" id="tbl">
           <thead><tr>
@@ -524,7 +547,7 @@ footer a{color:var(--muted)}
             <th data-k="titre"><button type="button">Titre</button></th>
             <th data-k="rub" class="hm"><button type="button">Rubrique</button></th>
             <th data-k="auteur" class="hm"><button type="button">Plume</button></th>
-            <th data-k="relu"><button type="button">Relecture</button></th>
+            <th data-k="relu"><button type="button">Relecteur</button></th>
             <th data-k="livre" class="hm"><button type="button">Livre</button></th>
             <th data-k="alertes" class="hm"><button type="button">Alertes</button></th>
           </tr></thead>
