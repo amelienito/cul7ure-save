@@ -12,7 +12,7 @@ Le site de Florian et Amélien pour relire les 247 articles de Cul7ure sauvés d
 - **Le livre** : les articles retenus (oui + oui) dans l'ordre de parution avec une estimation des pages, et ceux à discuter.
 - **Chiffres** : les graphiques, pour fouiller.
 
-La relecture est **croisée** : Florian relit les textes d'Amélien, Amélien ceux de Florian, et les autres plumes sont partagées à nombre de mots égal (environ 167 000 mots chacun). Une plume entière va à la même personne.
+Chacun **relit ses propres textes**, et les autres plumes sont partagées à nombre de mots égal (environ 167 000 mots chacun, 123 articles pour Florian et 124 pour Amélien). Une plume entière va à la même personne. La répartition se change article par article.
 
 ## Sécurité des textes
 

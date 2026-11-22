@@ -466,7 +466,7 @@
         h("h1", { class: "page", text: "Les archives de Cul7ure" }),
         h("p", { class: "lead", html: "Ici, Florian et Amélien relisent les <b>247 articles</b> sauvés et choisissent ceux du livre. On corrige le texte <b>directement sur le site</b> : le Google Doc de l’article se met à jour tout seul." }),
         h("div", { class: "steps3" },
-          h("div", {}, h("b", {}, h("span", { class: "num", text: "1" }), "Relire"), h("p", { text: "Chacun a sa liste : tu relis les textes de l’autre et une partie des autres plumes. Tu corriges, puis tu dis « C’est relu »." })),
+          h("div", {}, h("b", {}, h("span", { class: "num", text: "1" }), "Relire"), h("p", { text: "Chacun a sa liste : tu relis tes propres textes et une partie des autres plumes. Tu corriges, puis tu dis « C’est relu »." })),
           h("div", {}, h("b", {}, h("span", { class: "num", text: "2" }), "Voter"), h("p", { text: "Pour chaque article : oui, peut-être ou non pour le livre. Il est retenu quand vous dites oui tous les deux." })),
           h("div", {}, h("b", {}, h("span", { class: "num", text: "3" }), "Régler les problèmes"), h("p", { text: "Quelques articles sont incomplets : interviews vidéo à retranscrire, auteurs à retrouver…" }))),
         cfg.script ? codeCard() : h("div", { class: "card" },
@@ -490,6 +490,17 @@
     var relu = mine.filter(function (a) { return a.statut === "relu"; }).length;
     var q = myQueue(), first = q[0];
     root.appendChild(h("h1", { class: "page", text: "Salut " + cfg.qui + "." }));
+    var aMigrer = arts().filter(function (a) {
+      var s0 = SNAP_BY[a.id];
+      return s0 && s0.rel0 && a.statut !== "relu" && a.rel === s0.rel0 && s0.rel !== s0.rel0;
+    });
+    if (aMigrer.length) {
+      var pourMoi = aMigrer.filter(function (a) { return SNAP_BY[a.id].rel === cfg.qui; }).length;
+      root.appendChild(h("section", { class: "card hello", style: "margin-bottom:18px" },
+        h("h2", { class: "sec", text: "Nouvelle répartition : chacun relit ses propres textes" }),
+        h("p", { class: "hint", text: "Les autres plumes restent partagées à parts égales (environ 167 000 mots chacun). " + plur(aMigrer.length, "article") + " changent de relecteur, dont " + pourMoi + " qui passent dans ta liste. Ceux déjà relus ne bougent pas." }),
+        h("button", { class: "btn main", type: "button", text: "Appliquer la nouvelle répartition", onclick: function (e) { e.target.disabled = true; appliquerRepartition(aMigrer); } })));
+    }
     if (ls("bienvenue") === "1") {
       root.appendChild(h("section", { class: "card hello", style: "margin-bottom:18px" },
         h("h2", { class: "sec", text: "Bienvenue ! Tout est déjà branché." }),
@@ -509,7 +520,7 @@
           h("button", { class: "btn main", type: "button", text: "Envoyer le lien à " + o, onclick: function () { shareInvite(o); } }),
           h("button", { class: "lnk", type: "button", text: "C’est fait, masquer", onclick: function () { ls("invite-" + o, "1"); render(true); } }))));
     }
-    root.appendChild(h("p", { class: "lead", html: "Ta mission : relire tes <b>" + nf.format(mine.length) + " articles</b> (les textes d’" + esc(o) + " et une partie des autres plumes), puis dire lesquels tu veux dans le livre. Tu corriges directement ici." }));
+    root.appendChild(h("p", { class: "lead", html: "Ta mission : relire tes <b>" + nf.format(mine.length) + " articles</b> (tes propres textes et une partie des autres plumes), puis dire lesquels tu veux dans le livre. Tu corriges directement ici." }));
     var hero = h("section", { class: "hero-next" });
     if (first) {
       hero.appendChild(h("div", { class: "k", text: first.statut === "cours" ? "À reprendre" : "Ton prochain article" }));
@@ -591,6 +602,18 @@
       h("div", { style: "display:flex;gap:10px;flex-wrap:wrap;align-items:center" }, inp, h("button", { class: "btn main", type: "button", text: "Valider", onclick: ok })),
       err,
       h("p", { class: "small", style: "margin-top:14px", text: "Florian n’aura pas à faire ça : une fois branché, envoie-lui le lien d’invitation (Réglages → Inviter l’autre)." }));
+  }
+
+  function appliquerRepartition(liste) {
+    if (!API.on()) { needConnect(); return; }
+    liste.forEach(function (a) {
+      var ch = { rel: SNAP_BY[a.id].rel };
+      if (a.statut === "cours") ch.statut = "";
+      save(a, ch, { noRender: true });
+    });
+    flush();
+    render(true);
+    toast("Nouvelle répartition appliquée. Ta liste compte maintenant " + plur(arts().filter(function (a) { return a.rel === cfg.qui; }).length, "article") + ".", { ms: 5000 });
   }
 
   // ------------------------------------------------------------------ liste des articles
