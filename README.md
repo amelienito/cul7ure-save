@@ -1,6 +1,6 @@
 # Cul7ure · les archives
 
-Le site de Florian et Amélien pour relire les 247 articles de Cul7ure sauvés de la Wayback Machine, et choisir ceux du livre.
+Le site de Florian et Amélien pour relire les articles de Cul7ure sauvés de la Wayback Machine, choisir ceux du livre et préparer l'export pour la mise en page.
 
 **Le site :** https://amelienito.github.io/cul7ure-save
 
@@ -8,11 +8,14 @@ Le site de Florian et Amélien pour relire les 247 articles de Cul7ure sauvés d
 
 - **Accueil** : ton prochain article à relire, un bouton « Commencer la relecture », où vous en êtes tous les deux, et trois raccourcis (voter, le livre, les problèmes).
 - **Un article** : le texte s'ouvre directement sur le site. On le corrige là (gras pour les artistes, italique pour les œuvres, intertitres, citations, guillemets « » automatiques), et **le Google Doc se met à jour tout seul**. Puis « C'est relu », un vote pour le livre, une note pour l'autre, et « Article suivant ».
+- **Le correcteur** : dans l'article, le texte est souligné par type de remarque (orthographe, grammaire, typographie, répétitions, formulation). Un clic sur un mot souligné propose une correction ; « Passer les remarques en revue » les enchaîne. L'orthographe, la grammaire et le style viennent de LanguageTool (le texte est envoyé à leur service en ligne) ; les répétitions proches, les phrases très longues et les tournures lourdes sont repérées sur place. Noms propres, gras, italiques et citations ne sont pas corrigés ; chacun a son dictionnaire.
 - **Articles** : la liste, avec « Ma liste » ou « Tous », « À relire » ou « Relus », et une recherche.
-- **Le livre** : les articles retenus (oui + oui) dans l'ordre de parution avec une estimation des pages, et ceux à discuter.
+- **Le livre** : les articles retenus (oui + oui) dans l'ordre de parution avec une estimation des pages, ceux à discuter, et **l'export RTF** pour InDesign ou Word : tout le livre en un fichier, ou un fichier par année, pour les retenus, les relus ou tous. Chaque élément a son style de paragraphe (Chapitre, Surtitre, Titre article, Signature, Intertitre, Sous-intertitre, Citation, Liste, Note de travail).
 - **Chiffres** : les graphiques, pour fouiller.
 
-Chacun **relit ses propres textes**, et les autres plumes sont partagées à nombre de mots égal (environ 167 000 mots chacun, 123 articles pour Florian et 124 pour Amélien). Une plume entière va à la même personne. La répartition se change article par article.
+Chacun **relit ses propres textes**, et les autres plumes sont partagées à nombre de mots égal (environ 162 500 mots chacun, 106 articles pour Florian et 119 pour Amélien). Une plume entière va à la même personne. La répartition se change article par article.
+
+22 articles pensés pour le web sont **mis de côté** (interviews vidéo et audio, annonces d'Osmose et de PDF, événements, playlists, partenariats Groover) : ils ne comptent ni dans la relecture ni dans le livre. La liste est en bas de la page Articles, et le champ `web` de `data/articles.js` dit pourquoi.
 
 ## Sécurité des textes
 
@@ -27,10 +30,9 @@ Tout est expliqué sur le site : **Réglages → Installer le script**. En résu
 1. Copier `outils/script-google.gs` dans un nouveau projet sur [script.google.com](https://script.google.com).
 2. Lancer la fonction `installer` et accepter les autorisations. Elle crée le Sheet de suivi dans le dossier Drive « Cul7ure - Archives », retrouve le lien de chaque Doc et affiche un **code d'accès**.
 3. Déployer en **Application Web** (Exécuter en tant que : Moi · Qui a accès : Tout le monde).
-4. Sur le site : Réglages → coller l'URL de l'application Web et le code.
-5. Réglages → **Inviter l'autre** : copie un lien qui branche le site d'un coup pour l'autre.
+4. Mettre l'URL de l'application Web et le code dans `config.js` (champs `script` et `code`). Le site est alors branché pour tout le monde, sans rien taper.
 
-L'URL peut aussi aller dans `config.js` (champ `script`). Le code d'accès, lui, ne va jamais dans le dépôt : il est public.
+Le code est donc lisible par quiconque trouve ce dépôt : c'est un choix assumé pour que personne n'ait à le saisir. Pour le changer, lancer `nouveauCodeAcces` dans le script Google puis remplacer la valeur dans `config.js`.
 
 Si le script change plus tard : Déployer → Gérer les déploiements → crayon → Version : « Nouvelle version » → Déployer. L'URL ne change pas.
 

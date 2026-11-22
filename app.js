@@ -93,20 +93,20 @@
   function link(id) { return "#/a/" + encodeURIComponent(id); }
   function icon(st, size) {
     size = size || 20;
-    var col = { critical: "#d03b3b", serious: "#ec835a", warn: "#fab219", info: "#A8ABDC", good: "#0ca30c", cours: "#C6B6FF", todo: "#6C6FA6" }[st];
+    var col = { critical: "#E5534B", serious: "#E8875A", warn: "#E9B949", info: "#969DA2", good: "#4CC7A1", cours: "#EFEEE9", todo: "#6A7278" }[st];
     var svg = s("svg", { viewBox: "0 0 20 20", width: size, height: size, class: "ic", "aria-hidden": "true" });
     if (st === "critical") {
       svg.appendChild(s("path", { d: "M6.6 2h6.8L18 6.6v6.8L13.4 18H6.6L2 13.4V6.6z", fill: col }));
       svg.appendChild(s("path", { d: "M10 5.8v5.2M10 13.9v.1", stroke: "#fff", "stroke-width": "2", "stroke-linecap": "round" }));
     } else if (st === "serious") {
       svg.appendChild(s("path", { d: "M10 2.3l8.2 14.6H1.8z", fill: col, "stroke-linejoin": "round" }));
-      svg.appendChild(s("path", { d: "M10 7.6v4.2M10 14.4v.1", stroke: "#0b0b0b", "stroke-width": "1.9", "stroke-linecap": "round" }));
+      svg.appendChild(s("path", { d: "M10 7.6v4.2M10 14.4v.1", stroke: "#1A1E22", "stroke-width": "1.9", "stroke-linecap": "round" }));
     } else if (st === "warn") {
       svg.appendChild(s("circle", { cx: 10, cy: 10, r: 8.2, fill: col }));
-      svg.appendChild(s("path", { d: "M10 5.6v5.4M10 13.9v.1", stroke: "#0b0b0b", "stroke-width": "2", "stroke-linecap": "round" }));
+      svg.appendChild(s("path", { d: "M10 5.6v5.4M10 13.9v.1", stroke: "#1A1E22", "stroke-width": "2", "stroke-linecap": "round" }));
     } else if (st === "good") {
       svg.appendChild(s("circle", { cx: 10, cy: 10, r: 8.2, fill: col }));
-      svg.appendChild(s("path", { d: "M6.2 10.2l2.5 2.5 5.1-5.3", stroke: "#fff", "stroke-width": "2", fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round" }));
+      svg.appendChild(s("path", { d: "M6.2 10.2l2.5 2.5 5.1-5.3", stroke: "#0C2A21", "stroke-width": "2", fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round" }));
     } else if (st === "cours") {
       svg.appendChild(s("circle", { cx: 10, cy: 10, r: 7.4, fill: "none", stroke: col, "stroke-width": "1.8" }));
       svg.appendChild(s("path", { d: "M10 2.6a7.4 7.4 0 0 1 0 14.8z", fill: col }));
@@ -161,9 +161,11 @@
     return a;
   }
   var SNAP = (window.CUL7URE_DATA && window.CUL7URE_DATA.articles) || [];
-  var SNAP_BY = {};
-  SNAP.forEach(function (a) { SNAP_BY[a.id] = a; });
+  var SNAP_BY = {}, RETIRES_BY = {};
+  SNAP.forEach(function (a) { SNAP_BY[a.id] = a; if (a.web) RETIRES_BY[a.id] = a; });
   function byDate(x, y) { var a = x.date || "9999", b = y.date || "9999"; return a < b ? -1 : a > b ? 1 : 0; }
+  var RETIRES = SNAP.filter(function (a) { return a.web; });
+  SNAP = SNAP.filter(function (a) { return !a.web; });
   function fromSnap() { return SNAP.map(function (a) { return prepare(Object.assign({}, a)); }).sort(byDate); }
   var ALL = fromSnap();
   function byId(id) { for (var i = 0; i < ALL.length; i++) if (ALL[i].id === id) return ALL[i]; return null; }
@@ -197,7 +199,7 @@
   function mergeRemote(rows) {
     var seen = {}, out = [];
     rows.forEach(function (r) {
-      if (!r.id || seen[r.id]) return;
+      if (!r.id || seen[r.id] || RETIRES_BY[r.id]) return;
       seen[r.id] = true;
       out.push(prepare(applyRow(Object.assign({}, SNAP_BY[r.id] || {}), r)));
     });
@@ -225,7 +227,7 @@
     return null;
   }
   var CONF = window.CUL7URE_CONFIG || {};
-  var cfg = { script: ls("script") || CONF.script || "", code: ls("code") || "", qui: ls("qui") || "" };
+  var cfg = { script: ls("script") || CONF.script || "", code: ls("code") || CONF.code || "", qui: ls("qui") || "" };
   if (QUI.indexOf(cfg.qui) < 0) cfg.qui = "";
   var REMOTE = {}, lastLoad = 0;
   function other(q) { return q === "Florian" ? "Amélien" : "Florian"; }
@@ -235,8 +237,8 @@
   // lien d'invitation : #cle=…&script=…&qui=…
   function invitation() {
     var p = new URLSearchParams(location.hash.replace(/^#\/?\??/, ""));
-    if (!p.get("cle")) return false;
-    cfg.code = p.get("cle").trim().toLowerCase(); ls("code", cfg.code);
+    if (!p.get("cle") && !p.get("qui")) return false;
+    if (p.get("cle")) { cfg.code = p.get("cle").trim().toLowerCase(); ls("code", cfg.code); }
     if (p.get("script")) { cfg.script = p.get("script"); ls("script", cfg.script); }
     if (QUI.indexOf(p.get("qui")) >= 0) { cfg.qui = p.get("qui"); ls("qui", cfg.qui); }
     ls("bienvenue", "1");
@@ -247,7 +249,8 @@
   }
 
   function inviteUrl(qui) {
-    var q = new URLSearchParams({ cle: cfg.code });
+    var q = new URLSearchParams();
+    if (cfg.code !== CONF.code) q.set("cle", cfg.code);
     if (cfg.script !== CONF.script) q.set("script", cfg.script);
     if (qui) q.set("qui", qui);
     return location.origin + location.pathname + "#" + q.toString();
@@ -433,7 +436,7 @@
   }
   function go(hash) { if (location.hash === hash) route(); else location.hash = hash; }
   function route() {
-    if (/(^#|&|\?)cle=/.test(location.hash) && invitation() && STARTED) { load().catch(function () {}); }
+    if (/(^#|&|\?)(cle|qui)=/.test(location.hash) && invitation() && STARTED) { load().catch(function () {}); }
     var nv = parseHash();
     if (V.name === "article" && (nv.name !== "article" || nv.id !== V.id)) leaveArticle();
     var same = nv.name === V.name && nv.id === V.id;
@@ -464,11 +467,11 @@
     if (!API.on()) {
       var w = h("section", { class: "welcome" },
         h("h1", { class: "page", text: "Les archives de Cul7ure" }),
-        h("p", { class: "lead", html: "Ici, Florian et Amélien relisent les <b>247 articles</b> sauvés et choisissent ceux du livre. On corrige le texte <b>directement sur le site</b> : le Google Doc de l’article se met à jour tout seul." }),
+        h("p", { class: "lead", html: "Ici, Florian et Amélien relisent les <b>" + nf.format(arts().length) + " articles</b> sauvés et choisissent ceux du livre. On corrige le texte <b>directement sur le site</b> : le Google Doc de l’article se met à jour tout seul." }),
         h("div", { class: "steps3" },
           h("div", {}, h("b", {}, h("span", { class: "num", text: "1" }), "Relire"), h("p", { text: "Chacun a sa liste : tu relis tes propres textes et une partie des autres plumes. Tu corriges, puis tu dis « C’est relu »." })),
           h("div", {}, h("b", {}, h("span", { class: "num", text: "2" }), "Voter"), h("p", { text: "Pour chaque article : oui, peut-être ou non pour le livre. Il est retenu quand vous dites oui tous les deux." })),
-          h("div", {}, h("b", {}, h("span", { class: "num", text: "3" }), "Régler les problèmes"), h("p", { text: "Quelques articles sont incomplets : interviews vidéo à retranscrire, auteurs à retrouver…" }))),
+          h("div", {}, h("b", {}, h("span", { class: "num", text: "3" }), "Régler les problèmes"), h("p", { text: "Quelques articles ont un souci : auteur ou date à retrouver, spam à nettoyer…" }))),
         cfg.script ? codeCard() : h("div", { class: "card" },
           h("h2", { class: "sec", text: "Pour commencer : brancher le site sur Google" }),
           h("p", { class: "hint", text: "À faire une seule fois, par Amélien, sur ordinateur (environ 10 minutes). Ensuite, Florian n’aura qu’à ouvrir le lien que tu lui enverras." }),
@@ -566,7 +569,7 @@
           h("span", { class: "go", text: "→" })),
       h("a", { class: "tile", href: "#/articles?vue=tous&pb=1" },
         h("span", { class: "n tab", text: nf.format(nProb) }),
-        h("div", {}, h("b", { text: "Problèmes à régler" }), h("span", { text: "interviews à retranscrire, auteurs à retrouver… quand tu as un moment." })),
+        h("div", {}, h("b", { text: "Problèmes à régler" }), h("span", { text: "auteurs ou dates à retrouver, spams à nettoyer… quand tu as un moment." })),
         h("span", { class: "go", text: "→" }))));
     if (q.length > 1) {
       var ul = h("ul", { class: "nextlist" });
@@ -701,6 +704,16 @@
     root.appendChild(h("p", { class: "count", id: "count" }));
     root.appendChild(h("div", { class: "items", id: "items" }));
     root.appendChild(h("div", { class: "more-btn", id: "moreBtn" }));
+    if (RETIRES.length) {
+      var ret = h("details", { class: "retires" }, h("summary", {}, "Les " + RETIRES.length + " articles mis de côté", h("span", { text: " · pensés pour le web, sans intérêt sur papier" })));
+      var ul = h("ul", {});
+      RETIRES.slice().sort(byDate).forEach(function (a) {
+        ul.appendChild(h("li", {}, a.src ? h("a", { href: a.src, target: "_blank", rel: "noopener", text: a.titre }) : h("span", { text: a.titre }), h("small", { text: moisAn(a.date) + " · " + a.web })));
+      });
+      ret.appendChild(ul);
+      ret.appendChild(h("p", { class: "small", text: "Ils ne comptent plus dans la relecture ni dans le livre. Leurs Google Docs restent dans le Drive : pour en réintégrer un, demande-le à Claude." }));
+      root.appendChild(ret);
+    }
     renderItems();
   }
   function renderItems() {
@@ -799,6 +812,7 @@
   function leaveArticle() {
     if (!ED) return;
     var e = ED;
+    ckDetach();
     ED = null;
     if (e.dirty && e.state === "ok") {
       var el = $("ed");
@@ -940,9 +954,446 @@
     });
     return n;
   }
+  // ------------------------------------------------------------------ le correcteur
+  // Trois sources : LanguageTool (orthographe, grammaire, typographie, style), et deux contrôles faits ici
+  // (répétitions proches, phrases très longues, tournures lourdes). Rien ne touche au texte tant qu'on ne
+  // clique pas une suggestion : les soulignés passent par l'API CSS Custom Highlight.
+  var CK_KINDS = {
+    ortho: { lab: "Orthographe", one: "Orthographe" },
+    gram: { lab: "Grammaire", one: "Grammaire" },
+    typo: { lab: "Typographie", one: "Typographie" },
+    rep: { lab: "Répétitions", one: "Répétition" },
+    form: { lab: "Formulation", one: "Formulation" }
+  };
+  var CK_ORDER = ["ortho", "gram", "typo", "rep", "form"];
+  var CK_HL = !!(window.CSS && CSS.highlights && window.Highlight);
+  var LT_URL = "https://api.languagetool.org/v2/check";
+  // règles qui font du bruit sur des textes rap (ou que le site gère déjà)
+  var LT_SKIP = /APOS|GUILLEMET|DOUBLES_ESPACES|WHITESPACE_RULE|PLACE_DE_LA_VIRGULE|VIRGULE_DEBUT_DE_PHRASE|NOMBRES_EN_LETTRES|^TRES$|UPPERCASE_SENTENCE_START|FRENCH_WORD_REPEAT|TIRET|POINT_SUSPENSION|ELLIPSIS|^ESPACE_/;
+  var CK_LEX = {};
+  ("beat beats beatmaker beatmakers beatmaking instru instrus prod prods producer feat feats featuring featurings freestyle freestyles " +
+   "punchline punchlines flow flows kickeur kickeurs kicker kickers égotrip égotrips egotrip clash clashs diss drill trap boom bap hip hop " +
+   "mixtape mixtapes street streetwear storytelling sample samples samplé samplés samplée samplées sampler sampling gangsta ghostwriter " +
+   "autotune auto-tune vocoder banger bangers hit hits single singles tracklist teaser teasers clip clips cypher showcase outro intro interlude " +
+   "interludes hook hooks tape tapes crew crews squad game hater haters swag vibe vibes chill underground mainstream punch grime afro afrobeat " +
+   "afrobeats afrotrap cloud emo lofi lo-fi turn-up mumble booth streaming stream streams playlist playlists track tracks label labels major " +
+   "majors indé indés metal soul funk jazz rnb r&b dancehall reggaeton rock punk pop electro house techno drum bass dubstep boombap trapstar " +
+   "flex flexer kiffer kiffe kiffé kif ouf chelou relou zarbi vénère wesh frérot seum bédo iencli tieks téma bendo binks zbeul " +
+   "rappeur rappeurs rappeuse rappeuses rappé rappée rappés rapper rappe rappent kicke kickent kické " +
+   "youtube youtubeur youtubeurs spotify deezer instagram twitter tiktok podcast podcasts live lives teasé teaser").split(" ").forEach(function (w) { CK_LEX[w] = 1; });
+  var CK_STOP = {};
+  ("alors aussi autre autres avant avoir cette celle celles celui comme comment depuis encore entre était étaient avait avaient " +
+   "aurait auraient serait seraient seront leurs moins notre votre parce pendant quand quelque quelques toujours toute toutes faire juste ainsi " +
+   "après aujourd’hui mêmes elles jamais chaque plusieurs souvent beaucoup déjà autant tellement surtout contre selon d’abord puisque lorsque " +
+   "tandis jusqu laquelle lequel lesquels lesquelles quelle quelles notamment enfin ensuite autour durant parmi voilà voici peuvent pourrait " +
+   "pouvait faut fallait sait savoir encore avons avez étant ayant ceux dont plutôt vraiment").split(" ").forEach(function (w) { CK_STOP[w] = 1; });
+  delete CK_STOP.vraiment; // tic à repérer
+  var CK_TICS = [
+    [/\bsuite à\b/gi, "« Suite à » est critiqué à l’écrit.", ["après", "à la suite de"]],
+    [/\bmalgré qu(e|’|')/gi, "« Malgré que » est fautif à l’écrit.", ["bien que", "même si"]],
+    [/\bpallier à\b/gi, "On écrit « pallier quelque chose », sans « à ».", ["pallier"]],
+    [/\bau jour d[’']aujourd[’']hui\b/gi, "Pléonasme.", ["aujourd’hui"]],
+    [/\bvoire même\b/gi, "Pléonasme : « voire » suffit.", ["voire"]],
+    [/\bcomme par exemple\b/gi, "Pléonasme.", ["comme", "par exemple"]],
+    [/\bau niveau d(e la|e l[’']|u|es|e)\b/gi, "Tic d’écriture : souvent remplaçable par plus précis.", ["pour", "côté", "en matière de"]],
+    [/\ben termes? de\b/gi, "Tournure lourde.", ["en matière de", "pour"]],
+    [/\bau final\b/gi, "Tournure orale.", ["finalement", "au bout du compte"]],
+    [/\bde par\b/gi, "Tournure lourde.", ["par", "du fait de"]],
+    [/\bil est à noter que\s*/gi, "Tournure lourde : la phrase tient sans.", [""]],
+    [/\ble fait qu(e|’|')/gi, "« Le fait que » alourdit souvent la phrase.", []],
+    [/\bà l[’']heure actuelle\b/gi, "Tournure lourde.", ["aujourd’hui", "actuellement"]],
+    [/\bdans le but d(e|’|')/gi, "Tournure lourde.", ["pour", "afin de"]],
+    [/\bun petit peu\b/gi, "Tournure orale.", ["un peu"]],
+    [/\bon va dire\b,?\s*/gi, "Tic oral.", [""]],
+    [/\bpar contre\b/gi, "À l’écrit, on préfère souvent « en revanche ».", ["en revanche", "mais"]],
+    [/\bsensée?s? (être|faire|avoir|représenter|incarner|devenir)\b/gi, "Confusion : « censé » (supposé) et non « sensé » (raisonnable).", []],
+    [/\b(monter en haut|descendre en bas|prévoir à l[’']avance|collaborer ensemble|réunir ensemble|s[’']entraider mutuellement|car en effet|mais cependant|mais pourtant|puis ensuite|panacée universelle|reculer en arrière|au grand maximum|ajouter en plus)\b/gi, "Pléonasme.", []]
+  ];
+  CK_TICS.forEach(function (tc) { tc[0] = new RegExp("(?<![\\p{L}\\p{N}])(?:" + tc[0].source.replace(/\\b/g, "") + ")(?![\\p{L}\\p{N}])", "giu"); });
+  var CK = { ed: null, ltc: {}, prev: null, issues: [], cur: -1, busy: false, last: 0, pause: 0, err: "", ok: false, t: 0, ft: 0, again: false };
+  try { CK.hide = JSON.parse(ls("ckhide") || "{}"); } catch (e) { CK.hide = {}; }
+  function ckDico() { try { return JSON.parse(ls("dico") || "[]"); } catch (e) { return []; } }
+  function ckIgn() { try { return JSON.parse(ls("ckign") || "{}"); } catch (e) { return {}; } }
+
+  function ckAttach(ed) {
+    CK.ed = ed; CK.issues = []; CK.cur = -1; CK.prev = new WeakMap();
+    ed.spellcheck = !CK.ok;
+    ed.addEventListener("input", function () { ckSoon(900); });
+    ed.addEventListener("click", ckFromCaret);
+    ed.addEventListener("keyup", function (e) { if (/^Arrow/.test(e.key)) ckFromCaret(); });
+    ckRun();
+  }
+  function ckDetach() { CK.ed = null; CK.issues = []; CK.cur = -1; clearTimeout(CK.t); clearTimeout(CK.ft); ckClose(); ckPaint(); }
+  function ckSoon(ms) { clearTimeout(CK.t); CK.t = setTimeout(ckRun, ms); }
+
+  // le texte de l'éditeur, bloc par bloc, avec la correspondance position -> nœud
+  function ckMap(ed) {
+    var out = [];
+    ed.querySelectorAll("p,h1,h2,h3,blockquote,li").forEach(function (bl) {
+      if (bl.querySelector("p,h1,h2,h3,blockquote,li")) return;
+      var segs = [], text = "", tw = document.createTreeWalker(bl, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT), n;
+      while ((n = tw.nextNode())) {
+        if (n.nodeType === 1) { if (n.tagName === "BR") text += "\n"; continue; }
+        segs.push({ n: n, s: text.length });
+        text += n.nodeValue;
+      }
+      out.push({ el: bl, text: text, segs: segs, q: !!bl.closest("blockquote"), quotes: ckQuotes(text) });
+    });
+    return out;
+  }
+  function ckQuotes(t) {
+    var out = [], st = -1;
+    for (var i = 0; i < t.length; i++) { if (t[i] === "«") st = i; else if (t[i] === "»" && st >= 0) { out.push([st, i]); st = -1; } }
+    return out;
+  }
+  function ckPos(b, off, isEnd) {
+    for (var i = 0; i < b.segs.length; i++) {
+      var s = b.segs[i], L = s.n.nodeValue.length;
+      if (off < s.s + L || (isEnd && off === s.s + L)) return [s.n, Math.max(0, off - s.s)];
+    }
+    var l = b.segs[b.segs.length - 1];
+    return l ? [l.n, l.n.nodeValue.length] : null;
+  }
+  function ckRange(b, s, e) {
+    var a = ckPos(b, s, false), z = ckPos(b, e, true);
+    if (!a || !z) return null;
+    try { var r = document.createRange(); r.setStart(a[0], a[1]); r.setEnd(z[0], z[1]); return r.collapsed ? null : r; } catch (er) { return null; }
+  }
+  function ckFmt(b, s) {
+    var p = ckPos(b, s, false);
+    var el = p && p[0].parentElement;
+    return !!(el && el.closest("b,strong,i,em,a"));
+  }
+  function ckInQuote(b, s) { return b.q || b.quotes.some(function (q) { return s > q[0] && s < q[1]; }); }
+  function ckShift(ms, a, b) {
+    var n = Math.min(a.length, b.length), p = 0, s = 0;
+    while (p < n && a[p] === b[p]) p++;
+    while (s < n - p && a[a.length - 1 - s] === b[b.length - 1 - s]) s++;
+    var d = b.length - a.length, endA = a.length - s;
+    return ms.filter(function (m) { return m.o + m.l <= p || m.o >= endA; }).map(function (m) { return m.o >= endA ? Object.assign({}, m, { o: m.o + d }) : m; });
+  }
+
+  function ckRun() {
+    var ed = CK.ed;
+    if (!ed || !ed.isConnected || !ED) { return; }
+    var blocks = ckMap(ed), out = [], need = [];
+    var dico = {}; ckDico().forEach(function (w) { dico[w] = 1; });
+    var ign = ckIgn()[ED.id] || [];
+    var a = byId(ED.id);
+    (a && a.noms || []).forEach(function (w) { dico[String(w).toLowerCase()] = 1; });
+    function push(it) {
+      it.key = it.k + "|" + (it.rule || "") + "|" + it.txt.toLowerCase();
+      if (ign.indexOf(it.key) >= 0) return;
+      it.r = ckRange(blocks[it.b], it.s, it.e);
+      if (it.r) out.push(it);
+    }
+    blocks.forEach(function (b, bi) {
+      if (!b.text.trim()) return;
+      var lt = CK.ltc[b.text];
+      if (lt === undefined) {
+        need.push(b.text);
+        var pv = CK.prev.get(b.el);
+        lt = pv ? ckShift(pv.m, pv.t, b.text) : [];
+      }
+      CK.prev.set(b.el, { t: b.text, m: lt });
+      lt.forEach(function (m) {
+        var w = b.text.substr(m.o, m.l);
+        if (m.k === "ortho") {
+          var lw = w.toLowerCase();
+          if (/[A-ZÀ-ÝŒ0-9]/.test(w) || CK_LEX[lw] || dico[lw] || b.q || ckFmt(b, m.o)) return;
+        }
+        if ((m.k === "gram" || m.k === "form") && ckInQuote(b, m.o)) return;
+        push({ k: m.k, b: bi, s: m.o, e: m.o + m.l, txt: w, msg: m.msg, reps: m.reps, rule: m.id });
+      });
+      if (b.q) return;
+      // tournures lourdes
+      CK_TICS.forEach(function (tc) {
+        tc[0].lastIndex = 0;
+        var mm;
+        while ((mm = tc[0].exec(b.text))) {
+          if (ckInQuote(b, mm.index)) continue;
+          push({ k: "form", b: bi, s: mm.index, e: mm.index + mm[0].length, txt: mm[0], msg: tc[1], reps: tc[2], rule: "tic" });
+        }
+      });
+      // phrases très longues
+      var sre = /[^.!?…]+[.!?…»"]*/g, sm;
+      while ((sm = sre.exec(b.text))) {
+        var nb = (sm[0].match(/[^\s—–-]+/g) || []).length;
+        if (nb > 45) {
+          var st = sm.index + (sm[0].length - sm[0].replace(/^\s+/, "").length), en = sm.index + sm[0].replace(/\s+$/, "").length;
+          if (!ckInQuote(b, st)) push({ k: "form", b: bi, s: st, e: en, txt: b.text.slice(st, Math.min(en, st + 40)), msg: "Phrase de " + nb + " mots : la couper la rendrait plus facile à lire.", reps: [], rule: "longue" });
+        }
+      }
+    });
+    // répétitions proches
+    var toks = [], wre = /[A-Za-zÀ-ÖØ-öø-ÿŒœÆæ]+(?:-[A-Za-zÀ-ÖØ-öø-ÿŒœ]+)*/g;
+    blocks.forEach(function (b, bi) {
+      if (b.q) return;
+      var m;
+      wre.lastIndex = 0;
+      while ((m = wre.exec(b.text))) toks.push({ w: m[0], b: bi, s: m.index });
+      toks.push(null); // un saut de bloc compte comme quelques mots
+    });
+    var seen = {}, idx = 0;
+    toks.forEach(function (t) {
+      idx += t ? 1 : 6;
+      if (!t || t.w.length < 5 || /^[A-ZÀ-ÝŒ]/.test(t.w)) return;
+      var k = t.w.toLowerCase();
+      if (k.length > 5) k = k.replace(/[sx]$/, "");
+      if (CK_STOP[k] || CK_STOP[t.w.toLowerCase()]) return;
+      var b = blocks[t.b];
+      if (ckFmt(b, t.s)) return;
+      var p = seen[k];
+      if (p && idx - p.i <= 40) {
+        push({ k: "rep", b: t.b, s: t.s, e: t.s + t.w.length, txt: k, msg: "« " + t.w + " » revient " + (idx - p.i) + " mots après « " + p.w + " ».", reps: [], rule: "rep", prev: p });
+      }
+      seen[k] = { i: idx, w: t.w, b: t.b, s: t.s };
+    });
+    out.forEach(function (it) { if (it.prev) it.prevR = ckRange(blocks[it.prev.b], it.prev.s, it.prev.s + it.prev.w.length); });
+    out.sort(function (x, y) { return x.b - y.b || x.s - y.s; });
+    // on garde la remarque ouverte si elle existe toujours
+    var cur = CK.issues[CK.cur];
+    CK.issues = out;
+    CK.cur = cur ? ckFind(cur) : -1;
+    ckPaint(); ckPanel(); ckTb();
+    if (CK.cur < 0) ckClose(); else ckPlace();
+    if (need.length) ckFetch(need);
+  }
+  function ckFind(it) {
+    for (var i = 0; i < CK.issues.length; i++) { var x = CK.issues[i]; if (x.key === it.key && x.b === it.b && Math.abs(x.s - it.s) < 3) return i; }
+    return -1;
+  }
+  function ltKind(m) {
+    var it = m.rule.issueType, cat = m.rule.category.id, id = m.rule.id;
+    if (it === "misspelling" || cat === "TYPOS") return "ortho";
+    if (it === "typographical" || /TYPO|MAJUSCULE|CASING|PUNCT|PONCT/.test(cat)) return "typo";
+    if (it === "style" || it === "locale-violation" || it === "register" || /STYLE|REDUND|REPET|REGISTRE|PLEONASME|TOURNURE/.test(cat) || /^REP_/.test(id)) return "form";
+    return "gram";
+  }
+  function ckFetch(need) {
+    var now = Date.now();
+    if (CK.busy) { CK.again = true; return; }
+    var wait = Math.max(CK.pause - now, CK.last + 3500 - now, 0);
+    if (wait) { clearTimeout(CK.ft); CK.ft = setTimeout(ckRun, wait + 50); return; }
+    var batch = [], len = 0;
+    need.forEach(function (t) { if (batch.indexOf(t) < 0 && (len + t.length < 12000 || !batch.length)) { batch.push(t); len += t.length + 2; } });
+    var text = batch.join("\n\n"), starts = [], p = 0;
+    batch.forEach(function (t) { starts.push(p); p += t.length + 2; });
+    CK.busy = true; CK.last = now; ckPanel();
+    fetch(LT_URL, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ text: text, language: "fr", level: "picky" }) })
+      .then(function (r) { if (r.status === 429) throw new Error("TROP"); if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (j) {
+        var res = batch.map(function () { return []; });
+        (j.matches || []).forEach(function (m) {
+          if (LT_SKIP.test(m.rule.id)) return;
+          var i = starts.length - 1;
+          while (i > 0 && starts[i] > m.offset) i--;
+          var o = m.offset - starts[i];
+          if (o < 0 || o + m.length > batch[i].length) return;
+          res[i].push({ o: o, l: m.length, k: ltKind(m), id: m.rule.id, msg: m.message, reps: (m.replacements || []).slice(0, 4).map(function (x) { return x.value; }) });
+        });
+        batch.forEach(function (t, i) { CK.ltc[t] = res[i]; });
+        CK.err = ""; CK.ok = true;
+        if (CK.ed) CK.ed.spellcheck = false;
+      })
+      .catch(function (e) { CK.err = e.message === "TROP" ? "trop" : "off"; CK.pause = Date.now() + 60000; })
+      .finally(function () { CK.busy = false; CK.again = false; ckRun(); });
+  }
+
+  function ckPaint() {
+    if (!CK_HL) return;
+    CK_ORDER.forEach(function (k) {
+      var hl = new Highlight();
+      CK.issues.forEach(function (it) { if (it.k === k && !CK.hide[k]) hl.add(it.r); });
+      if (hl.size) CSS.highlights.set("ck-" + k, hl); else CSS.highlights.delete("ck-" + k);
+    });
+    var cur = CK.issues[CK.cur];
+    if (cur) {
+      var on = new Highlight(cur.r);
+      if (cur.prevR) on.add(cur.prevR);
+      CSS.highlights.set("ck-on", on);
+    } else CSS.highlights.delete("ck-on");
+  }
+  function ckVisible() { return CK.issues.filter(function (it) { return !CK.hide[it.k]; }); }
+  function ckCounts() { var c = {}; CK.issues.forEach(function (it) { c[it.k] = (c[it.k] || 0) + 1; }); return c; }
+  function ckStatus() {
+    if (!CK.ed) return "";
+    var n = ckVisible().length;
+    if (CK.err === "trop") return "LanguageTool reçoit trop de demandes : il reprend dans une minute. Les répétitions et les phrases longues restent repérées.";
+    if (CK.err === "off") return "Le correcteur en ligne ne répond pas. Les répétitions et les phrases longues restent repérées.";
+    if (CK.busy && !CK.ok) return "Lecture du texte…";
+    return n ? plur(n, "remarque") + " dans le texte." : "Rien à signaler.";
+  }
+  function ckPanel() {
+    var box = $("ckbox");
+    if (!box) return;
+    clear(box);
+    if (!CK.ed) { box.hidden = true; return; }
+    box.hidden = false;
+    var c = ckCounts();
+    box.appendChild(h("h3", { text: "Le correcteur" }));
+    box.appendChild(h("p", { class: "ck-st" + (CK.busy ? " busy" : ""), text: ckStatus() }));
+    var chips = h("div", { class: "ck-chips" });
+    CK_ORDER.forEach(function (k) {
+      var on = !CK.hide[k];
+      chips.appendChild(h("button", { type: "button", class: "ck-chip " + k, "aria-pressed": on ? "true" : "false", title: on ? "Masquer ces soulignés" : "Afficher ces soulignés",
+        onclick: function () { CK.hide[k] = on; ls("ckhide", JSON.stringify(CK.hide)); if (CK.issues[CK.cur] && CK.issues[CK.cur].k === k) ckClose(); ckPaint(); ckPanel(); ckTb(); } },
+        h("i"), h("span", { text: CK_KINDS[k].lab }), h("b", { class: "tab", text: String(c[k] || 0) })));
+    });
+    box.appendChild(chips);
+    if (ckVisible().length) box.appendChild(h("button", { class: "btn ghost sm wide", type: "button", text: "Passer les remarques en revue", onclick: function () { ckNext(1); } }));
+    var d = ckDico();
+    var foot = h("p", { class: "small ck-foot" }, "Orthographe, grammaire et style par LanguageTool (le texte est envoyé à leur service en ligne). ");
+    if (d.length) foot.appendChild(h("button", { class: "lnk", type: "button", text: "Ton dictionnaire : " + plur(d.length, "mot"), onclick: ckDicoDlg }));
+    box.appendChild(foot);
+  }
+  function ckTb() {
+    var b = $("ckTb");
+    if (!b) return;
+    var n = ckVisible().length;
+    clear(b).appendChild(document.createTextNode(CK.busy && !CK.ok ? "Correcteur…" : n ? "Correcteur · " + n : "Correcteur ✓"));
+    b.classList.toggle("warnq", n > 0);
+  }
+  function ckFromCaret() {
+    var sel = window.getSelection();
+    if (!sel.rangeCount || !sel.isCollapsed) return;
+    var r = sel.getRangeAt(0), best = -1, bl = 1e9;
+    CK.issues.forEach(function (it, i) {
+      if (CK.hide[it.k]) return;
+      try {
+        if (it.r.comparePoint(r.startContainer, r.startOffset) === 0) {
+          var L = it.r.toString().length;
+          if (L < bl) { bl = L; best = i; }
+        }
+      } catch (e) { /* nœud retiré */ }
+    });
+    if (best >= 0) ckOpen(best, false); else ckClose();
+  }
+  function ckNext(dir) {
+    var vis = CK.issues.map(function (it, i) { return CK.hide[it.k] ? -1 : i; }).filter(function (i) { return i >= 0; });
+    if (!vis.length) { ckClose(); return; }
+    var pos = vis.indexOf(CK.cur), i;
+    if (pos >= 0) i = vis[(pos + dir + vis.length) % vis.length];
+    else {
+      // à partir du curseur
+      var sel = window.getSelection(), from = null;
+      if (sel.rangeCount && CK.ed && CK.ed.contains(sel.anchorNode)) from = sel.getRangeAt(0);
+      i = vis[0];
+      if (from) for (var k = 0; k < vis.length; k++) { try { if (CK.issues[vis[k]].r.compareBoundaryPoints(Range.START_TO_START, from) >= 0) { i = vis[k]; break; } } catch (e) { /* */ } }
+    }
+    ckOpen(i, true);
+  }
+  function ckOpen(i, scroll) {
+    var it = CK.issues[i];
+    if (!it) return;
+    CK.cur = i;
+    ckPaint();
+    var pop = $("ckpop");
+    if (!pop) {
+      pop = h("div", { id: "ckpop", class: "ckpop", role: "dialog", "aria-label": "Remarque du correcteur" });
+      pop.addEventListener("pointerdown", function (e) { if (e.target.closest("button")) e.preventDefault(); });
+      document.body.appendChild(pop);
+    }
+    clear(pop);
+    var vis = ckVisible(), pos = vis.indexOf(it);
+    pop.appendChild(h("div", { class: "ck-head" },
+      h("span", { class: "ck-k " + it.k, text: CK_KINDS[it.k].one }),
+      h("span", { class: "ck-n tab", text: (pos + 1) + " / " + vis.length }),
+      h("button", { class: "ck-x", type: "button", "aria-label": "Fermer", text: "×", onclick: ckClose })));
+    pop.appendChild(h("p", { class: "ck-msg", text: it.msg }));
+    if (it.reps && it.reps.length) {
+      var rw = h("div", { class: "ck-reps" });
+      it.reps.forEach(function (rep) {
+        rw.appendChild(h("button", { type: "button", class: "ck-rep" + (rep === "" ? " del" : ""), text: rep === "" ? "Supprimer" : rep, onclick: function () { ckApply(it, rep); } }));
+      });
+      pop.appendChild(rw);
+    }
+    var acts = h("div", { class: "ck-acts" });
+    acts.appendChild(h("button", { class: "lnk", type: "button", text: it.k === "rep" ? "Ignorer ce mot ici" : "Ignorer", onclick: function () { ckIgnore(it); } }));
+    if (it.k === "ortho") acts.appendChild(h("button", { class: "lnk", type: "button", text: "Ajouter au dictionnaire", onclick: function () { ckLearn(it.txt); } }));
+    acts.appendChild(h("span", { class: "sp" }));
+    acts.appendChild(h("button", { class: "lnk", type: "button", "aria-label": "Remarque précédente", text: "←", onclick: function () { ckNext(-1); } }));
+    acts.appendChild(h("button", { class: "lnk strong", type: "button", text: "Suivante →", onclick: function () { ckNext(1); } }));
+    pop.appendChild(acts);
+    pop.classList.add("on");
+    if (scroll) {
+      var rc = it.r.getBoundingClientRect();
+      var mob = window.innerWidth < 760;
+      var target = rc.top + window.scrollY - (mob ? window.innerHeight * 0.22 : window.innerHeight * 0.35);
+      window.scrollTo({ top: Math.max(0, target), behavior: Math.abs(rc.top - window.innerHeight / 3) > 600 ? "auto" : "smooth" });
+      setTimeout(ckPlace, 380);
+    }
+    ckPlace();
+  }
+  function ckPlace() {
+    var pop = $("ckpop"), it = CK.issues[CK.cur];
+    if (!pop || !it || !pop.classList.contains("on")) return;
+    var rc = it.r.getBoundingClientRect();
+    if (!rc.width && !rc.height) { ckClose(); return; }
+    var W = Math.min(360, window.innerWidth - 16), ph = pop.offsetHeight || 160;
+    pop.style.width = W + "px";
+    var left = Math.min(Math.max(8, rc.left), window.innerWidth - W - 8);
+    var bottomLimit = window.innerHeight - (window.innerWidth < 760 ? 84 : 12);
+    var top = rc.bottom + 10;
+    if (top + ph > bottomLimit) top = Math.max(8, rc.top - ph - 10);
+    pop.style.left = left + "px"; pop.style.top = top + "px";
+  }
+  function ckClose() {
+    var pop = $("ckpop");
+    if (pop) pop.classList.remove("on");
+    if (CK.cur >= 0) { CK.cur = -1; ckPaint(); }
+  }
+  function ckApply(it, rep) {
+    if (!CK.ed || !it.r) return;
+    var w = it.r.toString();
+    if (rep && /^[A-ZÀ-ÝŒ]/.test(w) && /^[a-zà-ÿœ]/.test(rep)) rep = rep[0].toUpperCase() + rep.slice(1);
+    var sel = window.getSelection();
+    CK.ed.focus();
+    sel.removeAllRanges(); sel.addRange(it.r);
+    if (rep === "") document.execCommand("delete"); else document.execCommand("insertText", false, rep);
+    var b = it.b, s = it.s;
+    ckClose();
+    clearTimeout(CK.t);
+    ckRun();
+    // on enchaîne sur la remarque suivante
+    for (var i = 0; i < CK.issues.length; i++) { var x = CK.issues[i]; if (!CK.hide[x.k] && (x.b > b || (x.b === b && x.s > s))) { ckOpen(i, true); return; } }
+  }
+  function ckIgnore(it) {
+    var all = ckIgn(), l = all[ED.id] || [];
+    if (l.indexOf(it.key) < 0) l.push(it.key);
+    all[ED.id] = l; ls("ckign", JSON.stringify(all));
+    var b = it.b, s = it.s;
+    ckClose(); ckRun();
+    for (var i = 0; i < CK.issues.length; i++) { var x = CK.issues[i]; if (!CK.hide[x.k] && (x.b > b || (x.b === b && x.s >= s))) { ckOpen(i, true); return; } }
+  }
+  function ckLearn(w) {
+    var d = ckDico(), lw = String(w).toLowerCase();
+    if (d.indexOf(lw) < 0) d.push(lw);
+    ls("dico", JSON.stringify(d.sort()));
+    toast("« " + w + " » ajouté à ton dictionnaire.");
+    ckClose(); ckRun();
+  }
+  function ckDicoDlg() {
+    var d = ckDico();
+    var w = window.prompt("Ton dictionnaire (mots séparés par des virgules). Efface un mot pour qu’il soit de nouveau vérifié :", d.join(", "));
+    if (w === null) return;
+    ls("dico", JSON.stringify(w.split(",").map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean).sort()));
+    ckRun();
+  }
+  window.addEventListener("scroll", function () { if (CK.cur >= 0) ckPlace(); }, { passive: true });
+  window.addEventListener("resize", function () { if (CK.cur >= 0) ckPlace(); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && CK.cur >= 0) ckClose(); });
+  document.addEventListener("pointerdown", function (e) {
+    if (CK.cur < 0) return;
+    var pop = $("ckpop");
+    if ((pop && pop.contains(e.target)) || (CK.ed && CK.ed.contains(e.target))) return;
+    ckClose();
+  });
+
   function renderEd() {
     var box = $("edwrap");
     if (!box || !ED) return;
+    ckDetach();
     clear(box);
     var a = byId(ED.id);
     if (ED.state === "manquant") {
@@ -998,6 +1449,9 @@
     }
     qBtn.addEventListener("pointerdown", function (e) { e.preventDefault(); });
     qBtn.addEventListener("click", function () { var n = fixQuotes(ed); if (n) { markDirty(); toast(plur(n, "guillemet") + " corrigé" + (n > 1 ? "s" : "") + "."); } updQ(); });
+    var ckBtn = h("button", { type: "button", id: "ckTb", title: "Aller à la remarque suivante du correcteur", text: "Correcteur…" });
+    ckBtn.addEventListener("pointerdown", function (e) { e.preventDefault(); });
+    ckBtn.addEventListener("click", function () { ckNext(1); });
     function tbBtn(label, cls, title, fn) {
       var b = h("button", { type: "button", class: cls || null, title: title, text: label });
       b.addEventListener("pointerdown", function (e) { e.preventDefault(); });
@@ -1019,7 +1473,7 @@
         ed.focus(); sel.removeAllRanges(); sel.addRange(rg);
         if (u && /^https?:\/\/.+/.test(u)) ex("createLink", u);
       }),
-      h("span", { class: "sep" }), qBtn,
+      h("span", { class: "sep" }), qBtn, ckBtn,
       h("span", { class: "sep" }),
       tbBtn("Annuler", "", "Annuler la dernière modification (Cmd+Z)", function () { ex("undo"); }));
     try { document.execCommand("defaultParagraphSeparator", false, "p"); } catch (e) { /* ancien navigateur */ }
@@ -1046,6 +1500,7 @@
     box.appendChild(ed);
     ED.base = JSON.stringify(htmlToBlocs(ed));
     updQ();
+    ckAttach(ed);
   }
   function markDirty() {
     if (!ED) return;
@@ -1195,6 +1650,8 @@
       b1.appendChild(h("div", { id: "conflict", hidden: true }));
     }
     box.appendChild(b1);
+    box.appendChild(h("section", { class: "box ck", id: "ckbox", hidden: true }));
+    ckPanel();
     // livre
     if (!a.manquant) {
       var b2 = h("section", { class: "box" + (ED.askVote && k && !a[k] ? " hl" : ""), id: "voteBox" }, h("h3", { text: "Pour le livre" }));
@@ -1240,6 +1697,161 @@
   }
 
   // ------------------------------------------------------------------ le livre
+  // ------------------------------------------------------------------ export RTF (pour la mise en page)
+  // Chaque type de bloc a son style de paragraphe nommé : InDesign (ou Word) les reprend à l'import.
+  var RTF_ST = {
+    p: [0, "Normal", "\\ql\\sa120\\sl276\\slmult1\\f0\\fs22"],
+    chap: [1, "Chapitre", "\\qc\\sb2400\\sa600\\keepn\\f1\\fs72\\b"],
+    sur: [2, "Surtitre", "\\ql\\sa60\\keepn\\f1\\fs18\\caps"],
+    h1: [3, "Titre article", "\\ql\\sa120\\keepn\\f1\\fs44\\b"],
+    sig: [4, "Signature", "\\ql\\sa360\\keepn\\f0\\fs20\\i"],
+    h2: [5, "Intertitre", "\\ql\\sb240\\sa120\\keepn\\f1\\fs28\\b"],
+    h3: [6, "Sous-intertitre", "\\ql\\sb200\\sa80\\keepn\\f1\\fs24\\b"],
+    q: [7, "Citation", "\\ql\\li567\\ri567\\sb120\\sa160\\f0\\fs26\\i"],
+    li: [8, "Liste", "\\ql\\fi-284\\li284\\sa60\\f0\\fs22"],
+    n: [9, "Note de travail", "\\ql\\sa120\\f1\\fs16\\cf2"]
+  };
+  function rtfEsc(s) {
+    var o = "";
+    s = String(s || "");
+    for (var i = 0; i < s.length; i++) {
+      var ch = s[i], c = s.charCodeAt(i);
+      if (ch === "\\" || ch === "{" || ch === "}") o += "\\" + ch;
+      else if (ch === "\n" || ch === "\u000b" || ch === "\r") o += "\\line ";
+      else if (ch === "\t") o += "\\tab ";
+      else if (c === 0xa0) o += "\\~";
+      else if (c < 0x80) o += ch;
+      else o += "\\u" + (c > 32767 ? c - 65536 : c) + "?";
+    }
+    return o;
+  }
+  function rtfPar(st, runs, extra) {
+    var d = RTF_ST[st] || RTF_ST.p;
+    var body = (runs || []).map(function (r) {
+      var f = r[1] || "", t = rtfEsc(r[0]);
+      if (!f) return t;
+      return "{" + (f.indexOf("b") >= 0 ? "\\b" : "") + (f.indexOf("i") >= 0 ? "\\i" : "") + " " + t + "}";
+    }).join("");
+    return "{\\pard\\plain\\s" + d[0] + d[2] + (extra || "") + " " + (st === "li" ? "\\u8226?\\tab " : "") + body + "\\par}\n";
+  }
+  function rtfDoc(parts, titre) {
+    var ss = Object.keys(RTF_ST).map(function (k) { var d = RTF_ST[k]; return "{\\s" + d[0] + d[2] + (d[0] ? "\\sbasedon0" : "") + "\\snext0 " + d[1] + ";}"; }).join("\n");
+    return "{\\rtf1\\ansi\\ansicpg1252\\deff0\\uc1\\deflang1036\n" +
+      "{\\fonttbl{\\f0\\froman\\fcharset0 Georgia;}{\\f1\\fswiss\\fcharset0 Helvetica;}}\n" +
+      "{\\colortbl;\\red0\\green0\\blue0;\\red120\\green120\\blue120;}\n" +
+      "{\\stylesheet\n" + ss + "\n}\n" +
+      "{\\info{\\title " + rtfEsc(titre) + "}{\\author Cul7ure}}\n" +
+      "\\paperw11906\\paperh16838\\margl1418\\margr1418\\margt1418\\margb1418\\widowctrl\n" +
+      parts.join("") + "}";
+  }
+  function rtfArticle(a, d, o, first) {
+    var bl = (d && d.blocs) || [], out = "", pb = first ? "" : o.page ? "\\pagebb" : "\\sb720";
+    var h1 = null;
+    for (var i = 0; i < bl.length; i++) { if (bl[i].t === "h1") { h1 = bl[i]; break; } if (bl[i].t === "p") break; }
+    out += rtfPar("sur", [[(a.rub || "").replace(/s$/, "") + " · " + moisAn(a.date)]], pb);
+    out += rtfPar("h1", h1 ? h1.r : [[a.titre]]);
+    bl.forEach(function (b) {
+      if (b === h1) return;
+      if (b.t === "n") {
+        if (!o.notes) return;
+        out += rtfPar("n", b.r);
+        return;
+      }
+      out += rtfPar(b.t === "h1" ? "h2" : b.t, b.r, b.c ? "\\qc" : "");
+    });
+    return out;
+  }
+  var EXP = { busy: false, n: 0, total: 0, label: "", fails: [] };
+  try { EXP.o = Object.assign({ page: true, notes: true, scope: "dedans" }, JSON.parse(ls("exp") || "{}")); } catch (e) { EXP.o = { page: true, notes: true, scope: "dedans" }; }
+  function expRender() {
+    var box = $("expProg");
+    if (!box) return;
+    clear(box);
+    if (EXP.busy) {
+      box.appendChild(h("p", { class: "small", text: "Récupération des textes depuis les Google Docs : " + EXP.n + " / " + EXP.total + " (" + EXP.label + ")…" }));
+      box.appendChild(h("div", { class: "bar" }, h("i", { style: "width:" + Math.round(100 * EXP.n / Math.max(1, EXP.total)) + "%" })));
+    } else if (EXP.fails.length) {
+      box.appendChild(h("p", { class: "small", text: plur(EXP.fails.length, "article") + " n’" + (EXP.fails.length > 1 ? "ont" : "a") + " pas pu être lu" + (EXP.fails.length > 1 ? "s" : "") + " (une note le signale à sa place dans le fichier) :" }));
+      var ul = h("ul", { class: "fails" });
+      EXP.fails.forEach(function (f) { ul.appendChild(h("li", {}, h("a", { class: "lnk", href: link(f.a.id), text: f.a.titre }), " · " + f.err)); });
+      box.appendChild(ul);
+    }
+  }
+  function expRun(list, label, fname, chapters) {
+    if (EXP.busy) return;
+    if (!API.on()) { needConnect(); return; }
+    if (!list.length) { toast("Rien à exporter dans cette sélection."); return; }
+    EXP.busy = true; EXP.n = 0; EXP.total = list.length; EXP.label = label; EXP.fails = [];
+    expRender();
+    var res = new Array(list.length), next = 0;
+    function one() {
+      if (next >= list.length) return Promise.resolve();
+      var i = next++, a = list[i];
+      var p = DOCS[a.id] && !(ED && ED.id === a.id && ED.dirty) ? Promise.resolve(DOCS[a.id]) : API.get("doc", { id: a.id }).then(function (d) { DOCS[a.id] = d; return d; });
+      return p.then(function (d) { res[i] = d; }, function (e) {
+        var m = e.message;
+        EXP.fails.push({ a: a, err: m === "PAS_DE_DOC" ? "Doc introuvable" : m === "DOCX" ? "fichier Word, à convertir" : m });
+      }).then(function () { EXP.n++; expRender(); return one(); });
+    }
+    Promise.all([one(), one(), one()]).then(function () {
+      var o = EXP.o, parts = [], an = null, start = true;
+      list.forEach(function (a, i) {
+        if (chapters && a.annee !== an) {
+          an = a.annee;
+          parts.push(rtfPar("chap", [[an || "Sans date"]], start ? "" : "\\pagebb"));
+          start = false;
+        }
+        if (res[i]) parts.push(rtfArticle(a, res[i], o, start));
+        else parts.push(rtfPar("n", [["[Texte non récupéré : " + a.titre + "]"]], o.page && !start ? "\\pagebb" : ""));
+        start = false;
+      });
+      var blob = new Blob([rtfDoc(parts, "Cul7ure · " + label)], { type: "application/rtf" });
+      var url = URL.createObjectURL(blob), dl = h("a", { href: url, download: fname });
+      document.body.appendChild(dl); dl.click(); dl.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+      toast("Fichier prêt : " + fname + (EXP.fails.length ? " (" + plur(EXP.fails.length, "article") + " manquant" + (EXP.fails.length > 1 ? "s" : "") + ")" : ""));
+    }).finally(function () { EXP.busy = false; expRender(); });
+  }
+  function expCard(A, c) {
+    var o = EXP.o;
+    var scopes = {
+      dedans: { lab: "Retenus", list: c.dedans, f: "retenus" },
+      relus: { lab: "Relus", list: A.filter(function (a) { return a.statut === "relu"; }), f: "relus" },
+      tous: { lab: "Tous", list: A, f: "tous" }
+    };
+    var sc = scopes[o.scope] || scopes.dedans, L = sc.list;
+    var card = h("section", { class: "card exp" }, h("h2", { class: "sec", text: "Exporter pour la mise en page" }),
+      h("p", { class: "hint", text: "Des fichiers RTF prêts à importer dans InDesign ou Word : un style par élément (Titre article, Signature, Intertitre, Citation, Note de travail…), les gras et italiques gardés, l’ordre de parution respecté." }));
+    var seg = h("div", { class: "seg", role: "group", "aria-label": "Articles à exporter" });
+    Object.keys(scopes).forEach(function (k) {
+      seg.appendChild(h("button", { type: "button", class: k === o.scope ? "on" : null, "aria-pressed": k === o.scope ? "true" : "false",
+        onclick: function () { o.scope = k; ls("exp", JSON.stringify(o)); render(true); } }, scopes[k].lab + " ", h("span", { class: "tab", text: nf.format(scopes[k].list.length) })));
+    });
+    card.appendChild(seg);
+    function opt(key, lab) {
+      var cb = h("input", { type: "checkbox" });
+      cb.checked = !!o[key];
+      cb.addEventListener("change", function () { o[key] = cb.checked; ls("exp", JSON.stringify(o)); });
+      return h("label", { class: "chk" }, cb, h("span", { text: lab }));
+    }
+    card.appendChild(h("div", { class: "opts" }, opt("page", "Chaque article sur une nouvelle page"), opt("notes", "Garder les notes de travail (images, vidéos, sources)")));
+    var parAn = {};
+    L.forEach(function (a) { (parAn[a.annee || "Sans date"] = parAn[a.annee || "Sans date"] || []).push(a); });
+    var btns = h("div", { class: "exp-btns" });
+    btns.appendChild(h("button", { class: "btn main", type: "button", disabled: L.length ? null : "true",
+      onclick: function () { expRun(L, "livre complet (" + sc.f + ")", "Cul7ure - livre complet (" + sc.f + ").rtf", true); } },
+      "Tout en un fichier", h("span", { class: "tab", text: " · " + plur(L.length, "article") })));
+    Object.keys(parAn).sort().forEach(function (y) {
+      btns.appendChild(h("button", { class: "btn ghost", type: "button", onclick: function () { expRun(parAn[y], y + " (" + sc.f + ")", "Cul7ure - " + y + " (" + sc.f + ").rtf", true); } },
+        y, h("span", { class: "tab", text: " · " + parAn[y].length })));
+    });
+    card.appendChild(btns);
+    if (!L.length) card.appendChild(h("p", { class: "small", text: o.scope === "dedans" ? "Aucun article retenu pour l’instant : choisis « Relus » ou « Tous » pour exporter quand même." : "Aucun article dans cette sélection." }));
+    card.appendChild(h("div", { id: "expProg", class: "exp-prog" }));
+    card.appendChild(h("p", { class: "small", text: "Mieux vaut le faire sur l’ordinateur : le fichier arrive dans Téléchargements. Compte environ une seconde par article." }));
+    return card;
+  }
+
   function viewLivre(root) {
     var A = arts(), k = myKey();
     var c = { dedans: [], discuter: [], attente: [], ecarte: [] };
@@ -1279,6 +1891,8 @@
     root.appendChild(h("div", { class: "bcols" },
       h("section", { class: "card" }, h("h2", { class: "sec", text: "À discuter" }), h("p", { class: "hint", text: "Vos votes diffèrent : à trancher ensemble." }), dl),
       h("section", { class: "card" }, h("h2", { class: "sec", text: "Le sommaire" }), h("p", { class: "hint", text: "Les articles retenus, dans l’ordre de parution, avec une estimation des pages." }), toc)));
+    root.appendChild(expCard(A, c));
+    expRender();
   }
 
   // ------------------------------------------------------------------ chiffres

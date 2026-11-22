@@ -1,12 +1,12 @@
 /*
-  Réglages du tableau de bord Cul7ure.
+  Réglages du site des archives Cul7ure.
 
-  script : l'adresse de l'application Web du script Google (elle finit par /exec).
-           Elle s'obtient à l'installation du script (outils/script-google.gs, ou « Réglages » sur le site).
-           Avec cette adresse ici, Florian et Amélien n'ont plus qu'à taper le code d'accès.
-           Le code, lui, ne va jamais ici : ce fichier est public.
-           Tant que c'est vide, le site affiche l'instantané du 18/11/2026 (data/articles.js).
+  script : l'adresse de l'application Web du script Google (outils/script-google.gs).
+  code   : le code d'accès du script. Il est ici pour que Florian et Amélien n'aient jamais rien à taper.
+           Il est lisible par quiconque trouve ce dépôt : s'il faut le changer, lancer « nouveauCodeAcces »
+           dans le script Google, puis remplacer la valeur ici.
 */
 window.CUL7URE_CONFIG = {
-  script: "https://script.google.com/macros/s/AKfycbwShKb7Hf5qHR6idBXafS4TX_cL_KK-jUPvClpsb-vMcKAPhMWXNBvS0f4TOnpm_E2XPw/exec"
+  script: "https://script.google.com/macros/s/AKfycbwShKb7Hf5qHR6idBXafS4TX_cL_KK-jUPvClpsb-vMcKAPhMWXNBvS0f4TOnpm_E2XPw/exec",
+  code: "k2nrss"
 };
