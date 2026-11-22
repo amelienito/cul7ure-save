@@ -1037,6 +1037,7 @@
         segs.push({ n: n, s: text.length });
         text += n.nodeValue;
       }
+      if (bl.classList.contains("note")) return; // notes de travail : [Image…], Source…
       out.push({ el: bl, text: text, segs: segs, q: !!bl.closest("blockquote"), quotes: ckQuotes(text) });
     });
     return out;
@@ -1144,12 +1145,19 @@
       var b = blocks[t.b];
       if (ckFmt(b, t.s)) return;
       var p = seen[k];
-      if (p && idx - p.i <= 40) {
+      if (p && idx - p.i <= 32) {
         push({ k: "rep", b: t.b, s: t.s, e: t.s + t.w.length, txt: k, msg: "« " + t.w + " » revient " + (idx - p.i) + " mots après « " + p.w + " ».", reps: [], rule: "rep", prev: p });
       }
       seen[k] = { i: idx, w: t.w, b: t.b, s: t.s };
     });
     out.forEach(function (it) { if (it.prev) it.prevR = ckRange(blocks[it.prev.b], it.prev.s, it.prev.s + it.prev.w.length); });
+    // une même portée signalée deux fois : on garde la remarque la plus précise
+    var prio = { ortho: 0, gram: 1, typo: 2, form: 3, rep: 4 }, best = {};
+    out.forEach(function (it) {
+      var k2 = it.b + ":" + it.s + ":" + it.e;
+      if (!best[k2] || prio[it.k] < prio[best[k2].k] || (prio[it.k] === prio[best[k2].k] && it.rule === "tic")) best[k2] = it;
+    });
+    out = out.filter(function (it) { return best[it.b + ":" + it.s + ":" + it.e] === it; });
     out.sort(function (x, y) { return x.b - y.b || x.s - y.s; });
     // on garde la remarque ouverte si elle existe toujours
     var cur = CK.issues[CK.cur];
