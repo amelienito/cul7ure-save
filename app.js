@@ -93,20 +93,20 @@
   function link(id) { return "#/a/" + encodeURIComponent(id); }
   function icon(st, size) {
     size = size || 20;
-    var col = { critical: "#E5534B", serious: "#E8875A", warn: "#E9B949", info: "#969DA2", good: "#4CC7A1", cours: "#EFEEE9", todo: "#6A7278" }[st];
+    var col = { critical: "#FF6F8E", serious: "#FF9F70", warn: "#FFC978", info: "#93BDB0", good: "#4CC7A1", cours: "#7CF7DD", todo: "#5F8C80" }[st];
     var svg = s("svg", { viewBox: "0 0 20 20", width: size, height: size, class: "ic", "aria-hidden": "true" });
     if (st === "critical") {
       svg.appendChild(s("path", { d: "M6.6 2h6.8L18 6.6v6.8L13.4 18H6.6L2 13.4V6.6z", fill: col }));
       svg.appendChild(s("path", { d: "M10 5.8v5.2M10 13.9v.1", stroke: "#fff", "stroke-width": "2", "stroke-linecap": "round" }));
     } else if (st === "serious") {
       svg.appendChild(s("path", { d: "M10 2.3l8.2 14.6H1.8z", fill: col, "stroke-linejoin": "round" }));
-      svg.appendChild(s("path", { d: "M10 7.6v4.2M10 14.4v.1", stroke: "#1A1E22", "stroke-width": "1.9", "stroke-linecap": "round" }));
+      svg.appendChild(s("path", { d: "M10 7.6v4.2M10 14.4v.1", stroke: "#041311", "stroke-width": "1.9", "stroke-linecap": "round" }));
     } else if (st === "warn") {
       svg.appendChild(s("circle", { cx: 10, cy: 10, r: 8.2, fill: col }));
-      svg.appendChild(s("path", { d: "M10 5.6v5.4M10 13.9v.1", stroke: "#1A1E22", "stroke-width": "2", "stroke-linecap": "round" }));
+      svg.appendChild(s("path", { d: "M10 5.6v5.4M10 13.9v.1", stroke: "#041311", "stroke-width": "2", "stroke-linecap": "round" }));
     } else if (st === "good") {
       svg.appendChild(s("circle", { cx: 10, cy: 10, r: 8.2, fill: col }));
-      svg.appendChild(s("path", { d: "M6.2 10.2l2.5 2.5 5.1-5.3", stroke: "#0C2A21", "stroke-width": "2", fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round" }));
+      svg.appendChild(s("path", { d: "M6.2 10.2l2.5 2.5 5.1-5.3", stroke: "#03231B", "stroke-width": "2", fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round" }));
     } else if (st === "cours") {
       svg.appendChild(s("circle", { cx: 10, cy: 10, r: 7.4, fill: "none", stroke: col, "stroke-width": "1.8" }));
       svg.appendChild(s("path", { d: "M10 2.6a7.4 7.4 0 0 1 0 14.8z", fill: col }));
@@ -321,6 +321,7 @@
       lastLoad = Date.now();
       setSync("on", "À jour · " + hhmm());
       render();
+      migrer();
       return d;
     }).catch(function (e) {
       setSync("err", e.code ? "Code d’accès refusé" : "Script injoignable");
@@ -493,17 +494,6 @@
     var relu = mine.filter(function (a) { return a.statut === "relu"; }).length;
     var q = myQueue(), first = q[0];
     root.appendChild(h("h1", { class: "page", text: "Salut " + cfg.qui + "." }));
-    var aMigrer = arts().filter(function (a) {
-      var s0 = SNAP_BY[a.id];
-      return s0 && s0.rel0 && a.statut !== "relu" && a.rel === s0.rel0 && s0.rel !== s0.rel0;
-    });
-    if (aMigrer.length) {
-      var pourMoi = aMigrer.filter(function (a) { return SNAP_BY[a.id].rel === cfg.qui; }).length;
-      root.appendChild(h("section", { class: "card hello", style: "margin-bottom:18px" },
-        h("h2", { class: "sec", text: "Nouvelle répartition : chacun relit ses propres textes" }),
-        h("p", { class: "hint", text: "Les autres plumes restent partagées à parts égales (environ 167 000 mots chacun). " + plur(aMigrer.length, "article") + " changent de relecteur, dont " + pourMoi + " qui passent dans ta liste. Ceux déjà relus ne bougent pas." }),
-        h("button", { class: "btn main", type: "button", text: "Appliquer la nouvelle répartition", onclick: function (e) { e.target.disabled = true; appliquerRepartition(aMigrer); } })));
-    }
     if (ls("bienvenue") === "1") {
       root.appendChild(h("section", { class: "card hello", style: "margin-bottom:18px" },
         h("h2", { class: "sec", text: "Bienvenue ! Tout est déjà branché." }),
@@ -607,8 +597,16 @@
       h("p", { class: "small", style: "margin-top:14px", text: "Florian n’aura pas à faire ça : une fois branché, envoie-lui le lien d’invitation (Réglages → Inviter l’autre)." }));
   }
 
-  function appliquerRepartition(liste) {
-    if (!API.on()) { needConnect(); return; }
+  // la répartition « chacun relit ses propres textes » s'applique toute seule si le Sheet a encore l'ancienne
+  var MIGRE = false;
+  function migrer() {
+    if (MIGRE || !API.on() || !cfg.qui || !lastLoad) return;
+    MIGRE = true;
+    var liste = arts().filter(function (a) {
+      var s0 = SNAP_BY[a.id];
+      return s0 && s0.rel0 && a.statut !== "relu" && a.rel === s0.rel0 && s0.rel !== s0.rel0;
+    });
+    if (!liste.length) return;
     liste.forEach(function (a) {
       var ch = { rel: SNAP_BY[a.id].rel };
       if (a.statut === "cours") ch.statut = "";
@@ -616,7 +614,6 @@
     });
     flush();
     render(true);
-    toast("Nouvelle répartition appliquée. Ta liste compte maintenant " + plur(arts().filter(function (a) { return a.rel === cfg.qui; }).length, "article") + ".", { ms: 5000 });
   }
 
   // ------------------------------------------------------------------ liste des articles
@@ -989,26 +986,45 @@
    "pouvait faut fallait sait savoir encore avons avez étant ayant ceux dont plutôt vraiment").split(" ").forEach(function (w) { CK_STOP[w] = 1; });
   delete CK_STOP.vraiment; // tic à repérer
   var CK_TICS = [
-    [/\bsuite à\b/gi, "« Suite à » est critiqué à l’écrit.", ["après", "à la suite de"]],
-    [/\bmalgré qu(e|’|')/gi, "« Malgré que » est fautif à l’écrit.", ["bien que", "même si"]],
+    [/\bsuite à\b/gi, "« Suite à » est critiqué à l’écrit : « après » ou « à la suite de » passent mieux.", ["après", "à la suite de"]],
+    [/\bmalgré qu(e|’|')/gi, "« Malgré que » est fautif à l’écrit : « bien que » se construit pareil (avec le subjonctif).", ["bien que"]],
     [/\bpallier à\b/gi, "On écrit « pallier quelque chose », sans « à ».", ["pallier"]],
     [/\bau jour d[’']aujourd[’']hui\b/gi, "Pléonasme.", ["aujourd’hui"]],
     [/\bvoire même\b/gi, "Pléonasme : « voire » suffit.", ["voire"]],
-    [/\bcomme par exemple\b/gi, "Pléonasme.", ["comme", "par exemple"]],
-    [/\bau niveau d(e la|e l[’']|u|es|e)\b/gi, "Tic d’écriture : souvent remplaçable par plus précis.", ["pour", "côté", "en matière de"]],
-    [/\ben termes? de\b/gi, "Tournure lourde.", ["en matière de", "pour"]],
+    [/\bcomme par exemple\b/gi, "Pléonasme : garde l’un ou l’autre.", ["comme", "par exemple"]],
+    [/\bau niveau d(e la|e l[’']|u|es|e)\b/gi, "Tic d’écriture : la phrase gagne souvent à dire plus précisément de quoi il s’agit.", []],
+    [/\ben termes? de\b/gi, "Tournure lourde, souvent remplaçable par « pour » ou « côté » en reformulant.", []],
     [/\bau final\b/gi, "Tournure orale.", ["finalement", "au bout du compte"]],
-    [/\bde par\b/gi, "Tournure lourde.", ["par", "du fait de"]],
-    [/\bil est à noter que\s*/gi, "Tournure lourde : la phrase tient sans.", [""]],
+    [/\bde par\b/gi, "Tournure lourde.", ["du fait de", "par"]],
+    [/\bil est à noter que\b/gi, "Tournure lourde : la phrase tient sans, en la reformulant.", []],
     [/\ble fait qu(e|’|')/gi, "« Le fait que » alourdit souvent la phrase.", []],
     [/\bà l[’']heure actuelle\b/gi, "Tournure lourde.", ["aujourd’hui", "actuellement"]],
-    [/\bdans le but d(e|’|')/gi, "Tournure lourde.", ["pour", "afin de"]],
+    [/\bdans le but d(e|’|')/gi, "Tournure lourde.", []],
     [/\bun petit peu\b/gi, "Tournure orale.", ["un peu"]],
-    [/\bon va dire\b,?\s*/gi, "Tic oral.", [""]],
-    [/\bpar contre\b/gi, "À l’écrit, on préfère souvent « en revanche ».", ["en revanche", "mais"]],
+    [/\bon va dire\b/gi, "Tic oral.", []],
+    [/\bpar contre\b/gi, "À l’écrit, on préfère souvent « en revanche ».", ["en revanche"]],
     [/\bsensée?s? (être|faire|avoir|représenter|incarner|devenir)\b/gi, "Confusion : « censé » (supposé) et non « sensé » (raisonnable).", []],
-    [/\b(monter en haut|descendre en bas|prévoir à l[’']avance|collaborer ensemble|réunir ensemble|s[’']entraider mutuellement|car en effet|mais cependant|mais pourtant|puis ensuite|panacée universelle|reculer en arrière|au grand maximum|ajouter en plus)\b/gi, "Pléonasme.", []]
+    [/\b(monter en haut|descendre en bas|prévoir à l[’']avance|collaborer ensemble|réunir ensemble|s[’']entraider mutuellement|car en effet|mais cependant|mais pourtant|puis ensuite|panacée universelle|reculer en arrière|au grand maximum|ajouter en plus)\b/gi, "Pléonasme : un des deux mots suffit.", []]
   ];
+  // synonymes de même genre et même nombre, pour les répétitions les plus courantes dans un texte sur le rap
+  var CK_SYN = {
+    album: ["projet", "disque", "opus"], albums: ["projets", "disques"],
+    projet: ["album", "disque"], projets: ["albums", "disques"],
+    disque: ["album", "projet"], disques: ["albums", "projets"],
+    morceau: ["titre", "son"], morceaux: ["titres", "sons"],
+    titre: ["morceau", "son"], titres: ["morceaux", "sons"],
+    rappeur: ["artiste", "MC"], rappeurs: ["artistes", "MC"],
+    rappeuse: ["artiste"], rappeuses: ["artistes"],
+    couplet: ["passage"], couplets: ["passages"],
+    punchline: ["formule", "phrase"], punchlines: ["formules", "phrases"],
+    prod: ["instru"], prods: ["instrus"], instru: ["prod"], instrus: ["prods"],
+    flow: ["débit", "phrasé"], style: ["registre", "univers"],
+    groupe: ["collectif", "crew"], groupes: ["collectifs", "crews"],
+    sortie: ["parution"], carrière: ["trajectoire"],
+    public: ["auditoire"], auditeur: ["fan"], auditeurs: ["fans"],
+    vraiment: ["réellement", "franchement"], véritable: ["vrai"], véritablement: ["réellement"],
+    notamment: ["en particulier"], également: ["aussi"], totalement: ["complètement"], complètement: ["totalement"]
+  };
   CK_TICS.forEach(function (tc) { tc[0] = new RegExp("(?<![\\p{L}\\p{N}])(?:" + tc[0].source.replace(/\\b/g, "") + ")(?![\\p{L}\\p{N}])", "giu"); });
   var CK = { ed: null, ltc: {}, prev: null, issues: [], cur: -1, busy: false, last: 0, pause: 0, err: "", ok: false, t: 0, ft: 0, again: false };
   try { CK.hide = JSON.parse(ls("ckhide") || "{}"); } catch (e) { CK.hide = {}; }
@@ -1086,6 +1102,7 @@
       it.key = it.k + "|" + (it.rule || "") + "|" + it.txt.toLowerCase();
       if (ign.indexOf(it.key) >= 0) return;
       it.r = ckRange(blocks[it.b], it.s, it.e);
+      it.bt = blocks[it.b].text;
       if (it.r) out.push(it);
     }
     blocks.forEach(function (b, bi) {
@@ -1139,14 +1156,15 @@
     toks.forEach(function (t) {
       idx += t ? 1 : 6;
       if (!t || t.w.length < 5 || /^[A-ZÀ-ÝŒ]/.test(t.w)) return;
-      var k = t.w.toLowerCase();
+      var lw = t.w.toLowerCase(), k = lw;
       if (k.length > 5) k = k.replace(/[sx]$/, "");
-      if (CK_STOP[k] || CK_STOP[t.w.toLowerCase()]) return;
+      if (CK_STOP[k] || CK_STOP[lw]) return;
+      if (lw.length < 6 && !CK_SYN[lw]) return;
       var b = blocks[t.b];
       if (ckFmt(b, t.s)) return;
       var p = seen[k];
-      if (p && idx - p.i <= 32) {
-        push({ k: "rep", b: t.b, s: t.s, e: t.s + t.w.length, txt: k, msg: "« " + t.w + " » revient " + (idx - p.i) + " mots après « " + p.w + " ».", reps: [], rule: "rep", prev: p });
+      if (p && idx - p.i <= 30) {
+        push({ k: "rep", b: t.b, s: t.s, e: t.s + t.w.length, txt: k, msg: "« " + t.w + " » revient " + (idx - p.i) + " mots après « " + p.w + " ». Un synonyme ou un pronom allégerait la phrase.", reps: CK_SYN[lw] || [], rule: "rep", prev: p });
       }
       seen[k] = { i: idx, w: t.w, b: t.b, s: t.s };
     });
@@ -1291,6 +1309,20 @@
     }
     ckOpen(i, true);
   }
+  // la phrase autour d'une remarque, coupée proprement si elle est longue
+  function ckCtx(t, s, e) {
+    var a = s, z = e;
+    while (a > 0 && !/[.!?…\n]/.test(t[a - 1])) a--;
+    while (a < s && /\s/.test(t[a])) a++;
+    while (z < t.length && !/[.!?…\n]/.test(t[z])) z++;
+    if (z < t.length && t[z] !== "\n") z++;
+    while (z < t.length && /[»"”)]/.test(t[z])) z++;
+    var pre = t.slice(a, s), post = t.slice(e, z);
+    if (pre.length > 110) { pre = pre.slice(pre.length - 110); pre = "…" + pre.slice(pre.indexOf(" ") + 1); }
+    if (post.length > 110) { post = post.slice(0, 110); post = post.slice(0, post.lastIndexOf(" ")) + "…"; }
+    return { pre: pre, post: post };
+  }
+  function ckCase(w, rep) { return rep && /^[A-ZÀ-ÝŒ]/.test(w) && /^[a-zà-ÿœ]/.test(rep) ? rep[0].toUpperCase() + rep.slice(1) : rep; }
   function ckOpen(i, scroll) {
     var it = CK.issues[i];
     if (!it) return;
@@ -1304,34 +1336,53 @@
     }
     clear(pop);
     var vis = ckVisible(), pos = vis.indexOf(it);
+    var w = it.r.toString(), cx = ckCtx(it.bt || "", it.s, it.e);
     pop.appendChild(h("div", { class: "ck-head" },
       h("span", { class: "ck-k " + it.k, text: CK_KINDS[it.k].one }),
-      h("span", { class: "ck-n tab", text: (pos + 1) + " / " + vis.length }),
+      h("span", { class: "ck-n tab", text: (pos + 1) + " sur " + vis.length }),
       h("button", { class: "ck-x", type: "button", "aria-label": "Fermer", text: "×", onclick: ckClose })));
     pop.appendChild(h("p", { class: "ck-msg", text: it.msg }));
+    pop.appendChild(h("p", { class: "ck-ctx" }, cx.pre, h("mark", { class: it.k, text: w }), cx.post));
     if (it.reps && it.reps.length) {
-      var rw = h("div", { class: "ck-reps" });
+      pop.appendChild(h("p", { class: "ck-lab", text: it.reps.length > 1 ? "Choisis la version qui garde le sens :" : "La phrase deviendrait :" }));
+      var rw = h("div", { class: "ck-opts" });
+      var tail = cx.pre.split(" ").slice(-5).join(" "), head = cx.post.split(" ").slice(0, 7).join(" ");
       it.reps.forEach(function (rep) {
-        rw.appendChild(h("button", { type: "button", class: "ck-rep" + (rep === "" ? " del" : ""), text: rep === "" ? "Supprimer" : rep, onclick: function () { ckApply(it, rep); } }));
+        var r2 = ckCase(w, rep);
+        rw.appendChild(h("button", { type: "button", class: "ck-opt", onclick: function () { ckApply(it, rep); } },
+          h("span", { class: "pv" }, (tail.length < cx.pre.length ? "…" : "") + tail, rep === "" ? h("del", { text: w }) : h("ins", { text: r2 }), head + (head.length < cx.post.length ? "…" : "")),
+          h("span", { class: "go", text: rep === "" ? "Supprimer" : "Remplacer" })));
       });
       pop.appendChild(rw);
+    } else {
+      pop.appendChild(h("p", { class: "ck-lab", text: "Pas de remplacement automatique ici : la phrase est à reformuler à la main." }));
     }
     var acts = h("div", { class: "ck-acts" });
+    acts.appendChild(h("button", { class: "lnk", type: "button", text: "Je reformule", onclick: function () { ckEdit(it); } }));
+    if (it.prevR) acts.appendChild(h("button", { class: "lnk", type: "button", text: "Voir l’autre", onclick: function () { it.prevR.startContainer.parentElement.scrollIntoView({ block: "center", behavior: "smooth" }); setTimeout(ckPlace, 400); } }));
     acts.appendChild(h("button", { class: "lnk", type: "button", text: it.k === "rep" ? "Ignorer ce mot ici" : "Ignorer", onclick: function () { ckIgnore(it); } }));
     if (it.k === "ortho") acts.appendChild(h("button", { class: "lnk", type: "button", text: "Ajouter au dictionnaire", onclick: function () { ckLearn(it.txt); } }));
-    acts.appendChild(h("span", { class: "sp" }));
-    acts.appendChild(h("button", { class: "lnk", type: "button", "aria-label": "Remarque précédente", text: "←", onclick: function () { ckNext(-1); } }));
-    acts.appendChild(h("button", { class: "lnk strong", type: "button", text: "Suivante →", onclick: function () { ckNext(1); } }));
     pop.appendChild(acts);
+    pop.appendChild(h("div", { class: "ck-nav" },
+      h("button", { class: "lnk", type: "button", text: "← Précédente", onclick: function () { ckNext(-1); } }),
+      h("button", { class: "lnk strong", type: "button", text: "Suivante →", onclick: function () { ckNext(1); } })));
     pop.classList.add("on");
     if (scroll) {
       var rc = it.r.getBoundingClientRect();
       var mob = window.innerWidth < 760;
-      var target = rc.top + window.scrollY - (mob ? window.innerHeight * 0.22 : window.innerHeight * 0.35);
+      var target = rc.top + window.scrollY - (mob ? window.innerHeight * 0.18 : window.innerHeight * 0.3);
       window.scrollTo({ top: Math.max(0, target), behavior: Math.abs(rc.top - window.innerHeight / 3) > 600 ? "auto" : "smooth" });
       setTimeout(ckPlace, 380);
     }
     ckPlace();
+  }
+  function ckEdit(it) {
+    if (!CK.ed || !it.r) return;
+    var r = it.r.cloneRange();
+    ckClose();
+    CK.ed.focus();
+    var sel = window.getSelection();
+    sel.removeAllRanges(); sel.addRange(r);
   }
   function ckPlace() {
     var pop = $("ckpop"), it = CK.issues[CK.cur];
@@ -1354,10 +1405,15 @@
   function ckApply(it, rep) {
     if (!CK.ed || !it.r) return;
     var w = it.r.toString();
-    if (rep && /^[A-ZÀ-ÝŒ]/.test(w) && /^[a-zà-ÿœ]/.test(rep)) rep = rep[0].toUpperCase() + rep.slice(1);
-    var sel = window.getSelection();
+    rep = ckCase(w, rep);
+    var sel = window.getSelection(), r = it.r.cloneRange();
+    if (rep === "") {
+      // on emporte l'espace qui suit, pour ne pas laisser un double espace
+      var ec = r.endContainer;
+      if (ec.nodeType === 3 && /\s/.test(ec.nodeValue.charAt(r.endOffset))) r.setEnd(ec, r.endOffset + 1);
+    }
     CK.ed.focus();
-    sel.removeAllRanges(); sel.addRange(it.r);
+    sel.removeAllRanges(); sel.addRange(r);
     if (rep === "") document.execCommand("delete"); else document.execCommand("insertText", false, rep);
     var b = it.b, s = it.s;
     ckClose();
@@ -2105,6 +2161,7 @@
     setSync($("syncDot").className.replace("dot", "").trim(), $("syncTxt").textContent);
     if ($("dlgWho").open) $("dlgWho").close();
     render(true);
+    migrer();
     var cb = whoCb; whoCb = null;
     if (cb) cb();
   }
@@ -2123,14 +2180,22 @@
     $("scriptUrl").value = cfg.script; $("codeIn").value = cfg.code;
     $("dlgErr").hidden = true; $("dlgOk").hidden = true;
     $("dlgMore").hidden = !API.on();
+    $("adv").open = install === true || !API.on();
     $("install").open = install === true || (!API.on() && !CONF.script);
-    $("inviteWho").textContent = cfg.qui ? other(cfg.qui) : "l’autre";
+    $("inviteWho").textContent = $("inviteWho2").textContent = cfg.qui ? other(cfg.qui) : "l’autre";
+    var st = $("dlgState");
+    clear(st);
+    st.appendChild(h("span", { class: "dot " + (API.on() ? (lastLoad ? "on" : "busy") : "") }));
+    st.appendChild(document.createTextNode(API.on() ? (lastLoad ? "Branché à Google : vos corrections, votes et notes s’enregistrent dans les Docs et le Sheet." : "Connexion à Google…") : "Pas encore branché à Google."));
+    var nd = ckDico().length;
+    $("dicoInfo").textContent = nd ? "Ton dictionnaire compte " + plur(nd, "mot") + " (sur cet appareil). Le correcteur ne les souligne plus." : "Quand le correcteur souligne un mot qui existe (un nom, de l’argot), « Ajouter au dictionnaire » le fait taire. Ton dictionnaire est vide pour l’instant.";
     $("dlgSave").textContent = API.on() ? "Enregistrer" : "Brancher";
     var os = $("openSheet");
     os.hidden = !REMOTE.sheet; if (REMOTE.sheet) os.href = REMOTE.sheet;
     $("liensInfo").textContent = "Le script les retrouve tout seul toutes les heures" + (REMOTE.liensMaj ? " (dernière fois " + relTime(REMOTE.liensMaj) + ")" : "") + ". " +
       nf.format(ALL.filter(function (a) { return a.gdoc; }).length) + " articles ont leur Doc.";
     if (!scriptText) fetch("outils/script-google.gs").then(function (r) { return r.ok ? r.text() : ""; }).then(function (t) { scriptText = t; }).catch(function () {});
+    if (dlg.open) return;
     if (dlg.showModal) dlg.showModal(); else dlg.setAttribute("open", "");
   }
   function dlgMsg(id, txt) { $("dlgErr").hidden = true; $("dlgOk").hidden = true; var el = $(id); el.textContent = txt; el.hidden = !txt; }
@@ -2181,7 +2246,67 @@
     (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(function () { toast(msg, { ms: 4500 }); }, function () { window.prompt("Copie ceci :", txt); });
   }
   document.querySelectorAll("dialog [data-close]").forEach(function (b) { b.addEventListener("click", function () { b.closest("dialog").close(); }); });
+  // un clic à côté de la fenêtre la ferme aussi
+  document.querySelectorAll("dialog").forEach(function (d) {
+    d.addEventListener("click", function (e) {
+      if (e.target !== d) return;
+      var r = d.getBoundingClientRect();
+      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) d.close();
+    });
+  });
+  $("dicoEdit").addEventListener("click", function () { ckDicoDlg(); openSettings(false); });
 
+
+  // ------------------------------------------------------------------ les lucioles du fond (comme sur Osmose)
+  (function lucioles() {
+    var cv = $("lucioles");
+    if (!cv || !cv.getContext) return;
+    var cx = cv.getContext("2d"), W = 0, H = 0, dpr = 1, pts = [], last = 0, raf = 0;
+    var calme = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    function taille() {
+      dpr = Math.min(2, window.devicePixelRatio || 1);
+      W = window.innerWidth; H = window.innerHeight;
+      cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+      cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      var n = W < 760 ? 16 : 30;
+      while (pts.length < n) pts.push({ x: Math.random() * W, y: Math.random() * H, vx: (Math.random() - .5) * .14, vy: -.04 - Math.random() * .1, r: .8 + Math.random() * 1.5, ph: Math.random() * 6.28, sp: .4 + Math.random() * .8 });
+      pts.length = n;
+    }
+    function dessine(t) {
+      cx.clearRect(0, 0, W, H);
+      cx.globalCompositeOperation = "lighter";
+      pts.forEach(function (p) {
+        var a = .25 + .55 * (0.5 + 0.5 * Math.sin(p.ph + t * .001 * p.sp));
+        var g = cx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 7);
+        g.addColorStop(0, "rgba(124,247,221," + (a * .55).toFixed(3) + ")");
+        g.addColorStop(1, "rgba(124,247,221,0)");
+        cx.fillStyle = g;
+        cx.beginPath(); cx.arc(p.x, p.y, p.r * 7, 0, 6.283); cx.fill();
+        cx.fillStyle = "rgba(220,255,244," + a.toFixed(3) + ")";
+        cx.beginPath(); cx.arc(p.x, p.y, p.r * .7, 0, 6.283); cx.fill();
+      });
+      cx.globalCompositeOperation = "source-over";
+    }
+    function bouge(t) {
+      raf = requestAnimationFrame(bouge);
+      if (t - last < 33) return; // 30 images par seconde suffisent
+      var dt = Math.min(3, (t - last) / 16.7); last = t;
+      pts.forEach(function (p) {
+        p.x += (p.vx + Math.sin(p.ph + t * .0003) * .05) * dt; p.y += p.vy * dt;
+        if (p.y < -20) { p.y = H + 20; p.x = Math.random() * W; }
+        if (p.x < -20) p.x = W + 20; else if (p.x > W + 20) p.x = -20;
+      });
+      dessine(t);
+    }
+    taille();
+    window.addEventListener("resize", function () { taille(); if (calme) dessine(0); });
+    if (calme) { dessine(0); return; }
+    raf = requestAnimationFrame(bouge);
+    document.addEventListener("visibilitychange", function () {
+      cancelAnimationFrame(raf);
+      if (document.visibilityState === "visible") { last = 0; raf = requestAnimationFrame(bouge); }
+    });
+  })();
   // ------------------------------------------------------------------ branchements
   window.addEventListener("hashchange", route);
   window.addEventListener("scroll", hideTip, { passive: true });
