@@ -93,7 +93,7 @@
   function link(id) { return "#/a/" + encodeURIComponent(id); }
   function icon(st, size) {
     size = size || 20;
-    var col = { critical: "#B42318", serious: "#C4511A", warn: "#B7791F", info: "#5D564C", good: "#0A7D3E", cours: "#1FC266", todo: "#8B8376" }[st];
+    var col = { critical: "#B91C1C", serious: "#C2410C", warn: "#A16207", info: "#55554F", good: "#2340FF", cours: "#2340FF", todo: "#8E8E87" }[st];
     var svg = s("svg", { viewBox: "0 0 20 20", width: size, height: size, class: "ic", "aria-hidden": "true" });
     if (st === "critical") {
       svg.appendChild(s("path", { d: "M6.6 2h6.8L18 6.6v6.8L13.4 18H6.6L2 13.4V6.6z", fill: col }));
@@ -501,16 +501,17 @@
     root.appendChild(home);
     // comme une page de magazine : surtitre, titre, chapeau avec lettrine
     var jour = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
-    home.appendChild(h("p", { class: "kicker", text: "Relecture · " + jour }));
+    home.appendChild(h("p", { class: "dateline", text: jour.charAt(0).toUpperCase() + jour.slice(1) }));
     home.appendChild(h("h1", { class: "page", text: "Salut " + cfg.qui + "." }));
+    var resteMots = q.reduce(function (t2, a) { return t2 + (a.mots || 0); }, 0);
     home.appendChild(h("p", { class: "standfirst", html: (reste ? "Il te reste <b>" + plur(reste, "article") + "</b> à relire" : "Tous tes articles sont relus") +
       (sans ? (reste ? " et " : ", il reste ") + "<b>" + plur(sans, "vote") + "</b> à donner pour le livre" : "") + ". " +
-      esc(o) + " en est à " + o2r + " sur " + o2.length + ". Tout ce que tu corriges ici part directement dans les Google Docs." }));
+      "Tout ce que tu corriges ici part directement dans les Google Docs." }));
     if (ls("bienvenue") === "1") {
       home.appendChild(h("section", { class: "hello" },
         h("p", { class: "kicker", text: "Bienvenue" }),
         h("ol", { class: "how" },
-          h("li", { html: "Ouvre ton prochain article avec le grand bouton vert." }),
+          h("li", { html: "Ouvre ton prochain article avec le grand bouton bleu." }),
           h("li", { html: "Corrige-le directement dans la page, puis clique <b>C’est relu</b>." }),
           h("li", { html: "Dis si tu le veux dans le livre (<b>oui</b>, <b>peut-être</b> ou <b>non</b>), et passe au suivant." })),
         h("button", { class: "btn main sm", type: "button", text: "Compris", onclick: function () { ls("bienvenue", null); render(true); } })));
@@ -524,42 +525,40 @@
           h("button", { class: "btn main", type: "button", text: "Envoyer le lien à " + o, onclick: function () { shareInvite(o); } }),
           h("button", { class: "lnk", type: "button", text: "C’est fait, masquer", onclick: function () { ls("invite-" + o, "1"); render(true); } }))));
     }
-    // le bandeau vert : le prochain article, comme la photo de l'interview
+    // en lecture : le prochain article, comme la piste qu'on lance
+    var play = svgFrom('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3.8v16.4c0 .8.9 1.3 1.6.9l13-8.2c.6-.4.6-1.3 0-1.7l-13-8.2C6.9 2.5 6 3 6 3.8z"/></svg>');
     if (first) {
-      var page = 1, p0 = 0;
-      A.forEach(function (a) { if (a.id === first.id) p0 = page; if (a.livre !== "ecarte") page += pages(a.mots); });
-      var ex = first.extrait ? (first.extrait.length > 200 ? first.extrait.slice(0, 190).replace(/\s+\S*$/, "") + "…" : first.extrait) : "";
-      home.appendChild(h("a", { class: "band", href: link(first.id), onclick: openWith(qids) },
-        h("span", { class: "band-k", text: (first.statut === "cours" ? "À reprendre" : "Ton prochain article") + " · " + (first.rub || "").replace(/s$/, "") + " · " + moisAn(first.date) }),
-        h("span", { class: "band-t", text: first.titre }),
-        ex ? h("span", { class: "band-x", text: ex }) : null,
-        h("span", { class: "band-go", text: first.statut === "cours" ? "Reprendre la relecture" : "Commencer la relecture" })));
-      home.appendChild(h("p", { class: "caption", text: "Écrit par " + (first.auteur || "un auteur inconnu") + ", ≈ " + minLecture(first) + " min de lecture" + (p0 ? ", page " + p0 + " du livre" : "") + "." }));
+      home.appendChild(h("a", { class: "now", href: link(first.id), onclick: openWith(qids), "aria-label": (first.statut === "cours" ? "Reprendre " : "Relire ") + first.titre },
+        h("span", { class: "play" }, play),
+        h("span", { class: "now-b" },
+          h("span", { class: "now-k", text: first.statut === "cours" ? "À reprendre" : "Ton prochain article" }),
+          h("span", { class: "now-t", text: first.titre }),
+          h("span", { class: "now-m", text: [(first.rub || "").replace(/s$/, ""), moisAn(first.date), first.auteur || "auteur inconnu"].join(" · ") })),
+        h("span", { class: "now-d", text: duree(first.mots) })));
     } else {
-      home.appendChild(h("div", { class: "band" }, h("span", { class: "band-k", text: "Bravo" }), h("span", { class: "band-t", text: mine.length ? "Tout est relu." : "Aucun article ne t’est attribué." })));
+      home.appendChild(h("div", { class: "now" }, h("span", { class: "now-b" }, h("span", { class: "now-k", text: "Bravo" }), h("span", { class: "now-t", text: mine.length ? "Tout est relu." : "Aucun article ne t’est attribué." }))));
     }
-    // l'avancement, comme la signature de l'interview
-    var by = h("div", { class: "byline", "aria-label": "Avancement" });
-    [[cfg.qui, mine.length, relu], [o, o2.length, o2r]].forEach(function (x) {
-      var c = A.filter(function (a) { return a.rel === x[0] && a.statut === "cours"; }).length;
-      by.appendChild(h("div", { class: "r" }, h("b", { text: x[0] === cfg.qui ? "Toi" : x[0] }),
-        h("div", { class: "bar", role: "progressbar", "aria-label": "Relecture de " + x[0], "aria-valuemin": 0, "aria-valuemax": x[1], "aria-valuenow": x[2] },
-          h("i", { style: "width:" + (x[1] ? x[2] / x[1] * 100 : 0) + "%" }), h("i", { class: "l", style: "width:" + (x[1] ? c / x[1] * 100 : 0) + "%" })),
-        h("span", { class: "tab", text: x[2] + " / " + x[1] + " relus" })));
-    });
-    home.appendChild(by);
-    // la suite de la liste, numérotée comme les questions de l'interview
+    // l'avancement, comme la barre de lecture
+    var cm = A.filter(function (a) { return a.rel === cfg.qui && a.statut === "cours"; }).length;
+    home.appendChild(h("div", { class: "scrub" },
+      h("div", { class: "bar", role: "progressbar", "aria-label": "Ta relecture", "aria-valuemin": 0, "aria-valuemax": mine.length, "aria-valuenow": relu },
+        h("i", { style: "width:" + (mine.length ? relu / mine.length * 100 : 0) + "%" }), h("i", { class: "l", style: "width:" + (mine.length ? cm / mine.length * 100 : 0) + "%" })),
+      h("div", { class: "scrub-l" }, h("span", { html: "<b>" + relu + "</b> relu" + (relu > 1 ? "s" : "") + " sur " + mine.length }), h("span", { text: reste ? "encore ≈ " + dureeTotale(resteMots) + " de lecture" : "" }))));
+    home.appendChild(h("div", { class: "lautre" }, h("span", { text: o }),
+      h("div", { class: "bar" }, h("i", { style: "width:" + (o2.length ? o2r / o2.length * 100 : 0) + "%" })),
+      h("span", { class: "tab", text: o2r + " / " + o2.length })));
+    // la suite : une tracklist
     if (q.length > 1) {
-      home.appendChild(h("p", { class: "kicker suite-h", text: "Ensuite dans ta liste" }));
-      var ol = h("ol", { class: "suite" });
-      q.slice(1, 7).forEach(function (a, i) {
+      home.appendChild(h("h2", { class: "tracks-h", text: "La suite" }));
+      var ol = h("ol", { class: "tracks" });
+      q.slice(1, 8).forEach(function (a, i) {
         ol.appendChild(h("li", {}, h("a", { href: link(a.id), onclick: openWith(qids) },
-          h("span", { class: "kk", text: (a.rub || "") + " · " + moisAn(a.date) + (a.auteur && a.auteur !== cfg.qui ? " · " + a.auteur : "") }),
-          h("span", { class: "t", text: a.titre }),
-          h("span", { class: "n", text: String(i + 2).padStart(2, "0") }))));
+          h("span", { class: "tn", text: String(i + 2).padStart(2, "0") }),
+          h("span", {}, h("span", { class: "tt", text: a.titre }), h("span", { class: "tm", text: (a.rub || "") + " · " + moisAn(a.date) + (a.auteur && a.auteur !== cfg.qui ? " · " + a.auteur : "") })),
+          h("span", { class: "td", text: duree(a.mots) }))));
       });
       home.appendChild(ol);
-      if (q.length > 7) home.appendChild(h("p", { style: "margin:14px 0 0" }, h("a", { class: "lnk", href: "#/articles?vue=moi&etat=arelire", text: "Toute ma liste (" + q.length + ")" })));
+      if (q.length > 8) home.appendChild(h("p", { class: "toute" }, h("a", { class: "lnk", href: "#/articles?vue=moi&etat=arelire", text: "Toute ma liste (" + q.length + ")" })));
     }
     var disc = A.filter(function (a) { return a.livre === "discuter"; }).length;
     var ret = A.filter(function (a) { return a.livre === "dedans"; });
@@ -573,6 +572,9 @@
       h("a", { class: "rc", href: "#/articles?vue=tous&pb=1" }, h("span", { class: "n tab", text: nf.format(nProb) }), h("b", { text: "Problèmes à régler" }), h("span", { text: "Auteurs ou dates à retrouver, spams à nettoyer." }))));
   }
 
+  // le temps de lecture, écrit comme la durée d'un morceau
+  function duree(mots) { var s = Math.max(20, Math.round((mots || 0) / 250 * 60)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
+  function dureeTotale(mots) { var m = Math.round((mots || 0) / 250); return m >= 60 ? Math.floor(m / 60) + " h " + String(m % 60).padStart(2, "0") : m + " min"; }
   function pad3(n) { return String(n).padStart(3, "0"); }
   // la couverture d'un article : un cadre chromé, la couleur de sa rubrique, le titre en grand
   function coverEl(a, label, onclick) {
@@ -753,10 +755,12 @@
       if (a.livre && a.livre !== "attente") tg.appendChild(h("span", { class: "chip" + (a.livre === "dedans" ? " in" : "") }, h("i", { class: "sw " + LIVRE[a.livre].cls }), LIVRE[a.livre].one));
       if (a.tags.length && a.tags[0] !== "introuvable") tg.appendChild(h("span", { class: "chip" }, icon(TAGS[a.tags[0]].st, 15), TAGS[a.tags[0]].court));
       box.appendChild(h("a", { class: "it", href: link(a.id), onclick: openWith(ids), "data-id": a.id, style: "--c:" + r.hex },
+        h("span", { class: "it-n", text: pad3(num[a.id] || 0) }),
         h("div", { class: "it-b" },
-          h("div", { class: "t" }, a.titre, h("sup", { class: "tab", text: "(" + pad3(num[a.id] || 0) + ")" })),
+          h("div", { class: "t", text: a.titre }),
           h("div", { class: "m" }, h("span", { class: "sw", style: "background:" + r.hex }), [a.rub, moisAn(a.date), "par " + (a.auteur || "?")].join(" · "))),
-        tg));
+        tg,
+        h("span", { class: "it-d", text: a.mots ? duree(a.mots) : "" })));
     });
     if (list.length && $("pv") && (!$("pv").dataset.id || ids.indexOf($("pv").dataset.id) < 0)) showPv(list[0].id);
     var mb = clear($("moreBtn"));
