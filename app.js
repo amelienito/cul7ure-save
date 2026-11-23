@@ -492,11 +492,20 @@
     var o = other(cfg.qui);
     var mine = arts().filter(function (a) { return a.rel === cfg.qui; });
     var relu = mine.filter(function (a) { return a.statut === "relu"; }).length;
-    var q = myQueue(), first = q[0];
-    root.appendChild(h("h1", { class: "page", text: "Salut " + cfg.qui + "." }));
+    var q = myQueue(), first = q[0], qids = q.map(function (a) { return a.id; });
+    var k = myKey(), A = arts();
+    var sans = A.filter(function (a) { return !a[k]; }).length;
+    var reste = mine.length - relu;
+    // la phrase d'ouverture, comme une une de magazine
+    root.appendChild(h("h1", { class: "page statement" },
+      h("em", { text: "Salut " + cfg.qui + "." }), " ",
+      reste ? [h("span", { text: "Il te reste " }), h("em", { text: nf.format(reste) + " article" + (reste > 1 ? "s" : "") }), h("span", { text: " à relire, " })]
+        : h("span", { text: "Tous tes articles sont relus, " }),
+      sans ? [h("em", { text: nf.format(sans) + " vote" + (sans > 1 ? "s" : "") }), h("span", { text: " à donner, " })] : null,
+      h("span", { text: "et " }), h("em", { text: "un livre" }), h("span", { text: " à sortir." })));
     if (ls("bienvenue") === "1") {
-      root.appendChild(h("section", { class: "card hello", style: "margin-bottom:18px" },
-        h("h2", { class: "sec", text: "Bienvenue ! Tout est déjà branché." }),
+      root.appendChild(h("section", { class: "card hello" },
+        h("h2", { class: "sec", text: "Bienvenue, tout est déjà branché." }),
         h("ol", { class: "how" },
           h("li", { html: "Clique <b>Commencer la relecture</b> : le texte de ton prochain article s’ouvre." }),
           h("li", { html: "Corrige-le directement dans la page, puis clique <b>C’est relu</b>." }),
@@ -506,31 +515,49 @@
     }
     var autreActif = ALL.some(function (a) { return a.majPar === o; });
     if (!autreActif && !ls("invite-" + o)) {
-      root.appendChild(h("section", { class: "card hello", style: "margin-bottom:18px" },
+      root.appendChild(h("section", { class: "card hello" },
         h("h2", { class: "sec", text: "Invite " + o }),
         h("p", { class: "hint", text: "Envoie-lui ce lien : en l’ouvrant, il arrive directement sur sa liste, déjà connecté. Il n’a rien à installer ni à taper." }),
-        h("div", { style: "display:flex;gap:12px;flex-wrap:wrap;align-items:center" },
+        h("div", { class: "row" },
           h("button", { class: "btn main", type: "button", text: "Envoyer le lien à " + o, onclick: function () { shareInvite(o); } }),
           h("button", { class: "lnk", type: "button", text: "C’est fait, masquer", onclick: function () { ls("invite-" + o, "1"); render(true); } }))));
     }
-    root.appendChild(h("p", { class: "lead", html: "Ta mission : relire tes <b>" + nf.format(mine.length) + " articles</b> (tes propres textes et une partie des autres plumes), puis dire lesquels tu veux dans le livre. Tu corriges directement ici." }));
-    var hero = h("section", { class: "hero-next" });
+    // la double page : la couverture du prochain article, et la suite de ta liste
+    var spread = h("section", { class: "spread" });
+    var left = h("div", { class: "spread-l" });
     if (first) {
-      hero.appendChild(h("div", { class: "k", text: first.statut === "cours" ? "À reprendre" : "Ton prochain article" }));
-      hero.appendChild(h("div", { class: "t", text: first.titre }));
-      hero.appendChild(h("div", { class: "m", text: [first.rub, moisAn(first.date), "écrit par " + (first.auteur || "auteur inconnu"), "≈ " + minLecture(first) + " min de lecture"].join(" · ") }));
-      hero.appendChild(h("div", { class: "row" },
-        h("a", { class: "btn main big", href: link(first.id), onclick: openWith(q.map(function (a) { return a.id; })) }, first.statut === "cours" ? "Reprendre la relecture →" : "Commencer la relecture →"),
-        h("a", { class: "lnk", href: "#/articles?vue=moi&etat=arelire", text: "Voir toute ma liste (" + q.length + ")" })));
+      left.appendChild(coverEl(first, first.statut === "cours" ? "À reprendre" : "Ton prochain article", openWith(qids)));
+      left.appendChild(h("div", { class: "cv-go" },
+        h("a", { class: "btn main big", href: link(first.id), onclick: openWith(qids) }, first.statut === "cours" ? "Reprendre la relecture" : "Commencer la relecture"),
+        h("a", { class: "lnk", href: "#/articles?vue=moi&etat=arelire", text: "Toute ma liste (" + q.length + ")" })));
     } else {
-      hero.appendChild(h("div", { class: "k", text: "Bravo" }));
-      hero.appendChild(h("div", { class: "t", text: mine.length ? "Tu as relu tous tes articles." : "Aucun article ne t’est attribué." }));
-      hero.appendChild(h("div", { class: "m", text: "Il reste peut-être des votes pour le livre, juste en dessous." }));
+      left.appendChild(h("div", { class: "cover done" }, h("div", { class: "in" },
+        h("span", { class: "cv-k", text: "Bravo" }),
+        h("span", { class: "cv-t", text: mine.length ? "Tout est relu." : "Aucun article ne t’est attribué." }),
+        h("span", { class: "cv-x", text: "Il reste peut-être des votes pour le livre." }))));
     }
-    root.appendChild(hero);
-    var prog = h("section", { class: "card prog", "aria-label": "Avancement" });
+    spread.appendChild(left);
+    var right = h("div", { class: "spread-r" });
+    if (q.length > 1) {
+      right.appendChild(h("h2", { class: "idx-h", text: "Ensuite dans ta liste" }));
+      var idx = h("ol", { class: "idx" });
+      q.slice(1, 8).forEach(function (a, i) {
+        idx.appendChild(h("li", {}, h("a", { href: link(a.id), onclick: openWith(qids) },
+          h("span", { class: "ix-t" }, a.titre, h("sup", { class: "tab", text: "(" + pad3(i + 2) + ")" })),
+          h("span", { class: "ix-m", text: a.rub + " · " + moisAn(a.date) + (a.auteur && a.auteur !== cfg.qui ? " · " + a.auteur : "") }))));
+      });
+      right.appendChild(idx);
+      if (q.length > 8) right.appendChild(h("a", { class: "lnk", href: "#/articles?vue=moi&etat=arelire", text: "Et " + plur(q.length - 8, "autre") }));
+    }
+    spread.appendChild(right);
+    root.appendChild(spread);
+    // l'avancement et les raccourcis
+    var disc = A.filter(function (a) { return a.livre === "discuter"; }).length;
+    var ret = A.filter(function (a) { return a.livre === "dedans"; });
+    var nProb = ALL.filter(function (a) { return a.tags.length; }).length;
+    var prog = h("section", { class: "prog", "aria-label": "Avancement" });
     [cfg.qui, o].forEach(function (qq) {
-      var m = arts().filter(function (a) { return a.rel === qq; });
+      var m = A.filter(function (a) { return a.rel === qq; });
       var r = m.filter(function (a) { return a.statut === "relu"; }).length, c = m.filter(function (a) { return a.statut === "cours"; }).length;
       prog.appendChild(h("div", { class: "row" },
         h("b", { text: qq === cfg.qui ? "Toi" : qq }),
@@ -539,35 +566,36 @@
         h("span", { class: "tab", text: r + " / " + m.length + " relus" })));
     });
     root.appendChild(prog);
-    var k = myKey(), A = arts();
-    var sans = A.filter(function (a) { return !a[k]; }).length;
-    var disc = A.filter(function (a) { return a.livre === "discuter"; }).length;
-    var ret = A.filter(function (a) { return a.livre === "dedans"; });
-    var nProb = ALL.filter(function (a) { return a.tags.length; }).length;
     root.appendChild(h("section", { class: "tiles" },
       h("button", { class: "tile", type: "button", onclick: openTri },
         h("span", { class: "n tab", text: nf.format(sans) }),
-        h("div", {}, h("b", { text: "Voter pour le livre" }), h("span", { text: sans ? (sans > 1 ? "articles attendent ton vote. Le titre et l’extrait suffisent souvent." : "article attend ton vote.") : "Tous tes votes sont faits." })),
-        h("span", { class: "go", text: "→" })),
+        h("b", { text: "Voter pour le livre" }),
+        h("span", { text: sans ? (sans > 1 ? "articles attendent ton vote. Le titre et l’extrait suffisent souvent." : "article attend ton vote.") : "Tous tes votes sont faits." })),
       disc ? h("a", { class: "tile", href: "#/livre" },
         h("span", { class: "n tab", text: nf.format(disc) }),
-        h("div", {}, h("b", { text: "À discuter avec " + o }), h("span", { text: "articles où vos votes ne sont pas d’accord." })),
-        h("span", { class: "go", text: "→" }))
+        h("b", { text: "À discuter avec " + o }),
+        h("span", { text: "articles où vos votes ne sont pas d’accord." }))
         : h("a", { class: "tile", href: "#/livre" },
           h("span", { class: "n tab", text: nf.format(ret.length) }),
-          h("div", {}, h("b", { text: "Le livre" }), h("span", { text: "articles retenus pour l’instant (≈ " + nf.format(ret.reduce(function (t, a) { return t + pages(a.mots); }, 0)) + " pages)." })),
-          h("span", { class: "go", text: "→" })),
+          h("b", { text: "Le livre" }),
+          h("span", { text: "articles retenus pour l’instant, ≈ " + nf.format(ret.reduce(function (t2, a) { return t2 + pages(a.mots); }, 0)) + " pages." })),
       h("a", { class: "tile", href: "#/articles?vue=tous&pb=1" },
         h("span", { class: "n tab", text: nf.format(nProb) }),
-        h("div", {}, h("b", { text: "Problèmes à régler" }), h("span", { text: "auteurs ou dates à retrouver, spams à nettoyer… quand tu as un moment." })),
-        h("span", { class: "go", text: "→" }))));
-    if (q.length > 1) {
-      var ul = h("ul", { class: "nextlist" });
-      q.slice(1, 6).forEach(function (a) {
-        ul.appendChild(h("li", {}, h("a", { href: link(a.id), onclick: openWith(q.map(function (x) { return x.id; })) }, h("b", { text: a.titre }), h("span", { text: moisAn(a.date) }))));
-      });
-      root.appendChild(h("section", { class: "card", style: "margin-top:16px" }, h("h2", { class: "sec", text: "Ensuite dans ta liste" }), ul));
-    }
+        h("b", { text: "Problèmes à régler" }),
+        h("span", { text: "auteurs ou dates à retrouver, spams à nettoyer, quand tu as un moment." }))));
+  }
+
+  function pad3(n) { return String(n).padStart(3, "0"); }
+  // la couverture d'un article : un cadre chromé, la couleur de sa rubrique, le titre en grand
+  function coverEl(a, label, onclick) {
+    var r = rubOf(a.rub);
+    var ex = a.extrait ? (a.extrait.length > 210 ? a.extrait.slice(0, 200).replace(/\s+\S*$/, "") + "…" : a.extrait) : "";
+    return h("a", { class: "cover", href: link(a.id), onclick: onclick || null, style: "--c:" + r.hex },
+      h("div", { class: "in" },
+        h("span", { class: "cv-top" }, h("span", { class: "cv-k", text: label || "" }), h("span", { class: "cv-r", text: a.rub || "" })),
+        h("span", { class: "cv-t", text: a.titre }),
+        h("span", { class: "cv-m", text: [moisAn(a.date), "par " + (a.auteur || "auteur inconnu"), a.mots ? "≈ " + minLecture(a) + " min de lecture" : ""].filter(Boolean).join(" · ") }),
+        ex ? h("span", { class: "cv-x", text: ex }) : null));
   }
 
   function codeCard() {
@@ -698,9 +726,16 @@
     if (p.livre) tag(p.livre === "sansmoi" ? "Sans mon vote" : LIVRE[p.livre] ? LIVRE[p.livre].lab : p.livre, "livre");
     if (p.rub) tag(p.rub, "rub");
     root.appendChild(act);
-    root.appendChild(h("p", { class: "count", id: "count" }));
-    root.appendChild(h("div", { class: "items", id: "items" }));
-    root.appendChild(h("div", { class: "more-btn", id: "moreBtn" }));
+    // le sommaire : la couverture de l'article survolé à gauche, la liste à droite
+    var main = h("div", { class: "list-main" },
+      h("p", { class: "count", id: "count" }),
+      h("div", { class: "items", id: "items" }),
+      h("div", { class: "more-btn", id: "moreBtn" }));
+    var pv = h("aside", { class: "pv", id: "pv", "aria-hidden": "true" });
+    root.appendChild(h("div", { class: "list-grid" }, pv, main));
+    function survol(e) { var it = e.target.closest && e.target.closest(".it"); if (it && it.dataset.id !== pv.dataset.id) showPv(it.dataset.id); }
+    main.addEventListener("mouseover", survol);
+    main.addEventListener("focusin", survol);
     if (RETIRES.length) {
       var ret = h("details", { class: "retires" }, h("summary", {}, "Les " + RETIRES.length + " articles mis de côté", h("span", { text: " · pensés pour le web, sans intérêt sur papier" })));
       var ul = h("ul", {});
@@ -722,22 +757,33 @@
     c.appendChild(document.createTextNode(list.length > 1 ? " articles" : " article"));
     var box = clear($("items"));
     if (!list.length) box.appendChild(h("p", { class: "empty", text: "Aucun article ne correspond." }));
+    var num = {};
+    ALL.forEach(function (x, i) { num[x.id] = i + 1; });
     list.slice(0, SHOWN).forEach(function (a) {
       var r = rubOf(a.rub);
       var tg = h("span", { class: "tg" }, statusChip(a));
       if (a.livre && a.livre !== "attente") tg.appendChild(h("span", { class: "chip" + (a.livre === "dedans" ? " in" : "") }, h("i", { class: "sw " + LIVRE[a.livre].cls }), LIVRE[a.livre].one));
       if (a.tags.length && a.tags[0] !== "introuvable") tg.appendChild(h("span", { class: "chip" }, icon(TAGS[a.tags[0]].st, 15), TAGS[a.tags[0]].court));
-      box.appendChild(h("a", { class: "it", href: link(a.id), onclick: openWith(ids) },
-        icon(a.manquant ? "critical" : a.statut === "relu" ? "good" : a.statut === "cours" ? "cours" : "todo", 20),
-        h("div", {}, h("div", { class: "t", text: a.titre }),
-          h("div", { class: "m" }, h("span", { class: "sw", style: "background:" + r.hex + ";margin-right:6px" }), [a.rub, moisAn(a.date), "par " + (a.auteur || "?")].join(" · "))),
+      box.appendChild(h("a", { class: "it", href: link(a.id), onclick: openWith(ids), "data-id": a.id, style: "--c:" + r.hex },
+        h("div", { class: "it-b" },
+          h("div", { class: "t" }, a.titre, h("sup", { class: "tab", text: "(" + pad3(num[a.id] || 0) + ")" })),
+          h("div", { class: "m" }, h("span", { class: "sw", style: "background:" + r.hex }), [a.rub, moisAn(a.date), "par " + (a.auteur || "?")].join(" · "))),
         tg));
     });
+    if (list.length && $("pv") && (!$("pv").dataset.id || ids.indexOf($("pv").dataset.id) < 0)) showPv(list[0].id);
     var mb = clear($("moreBtn"));
     if (list.length > SHOWN) {
       mb.appendChild(h("span", { text: nf.format(SHOWN) + " sur " + nf.format(list.length) }));
       mb.appendChild(h("button", { class: "btn ghost sm", type: "button", text: "Voir " + Math.min(PAGE, list.length - SHOWN) + " de plus", onclick: function () { SHOWN += PAGE; renderItems(); } }));
     }
+  }
+
+  function showPv(id) {
+    var pv = $("pv"), a = byId(id);
+    if (!pv || !a) return;
+    pv.dataset.id = id;
+    clear(pv).appendChild(coverEl(a, a.statut === "relu" ? "Relu" : a.statut === "cours" ? "En cours" : "À relire"));
+    if (a.noms && a.noms.length) pv.appendChild(h("p", { class: "pv-noms" }, h("em", { text: "On y croise " }), a.noms.slice(0, 6).join(", ") + (a.noms.length > 6 ? "…" : "")));
   }
 
   // ------------------------------------------------------------------ article : lire, corriger, voter
@@ -835,7 +881,7 @@
       var f = r[1] || "";
       if (f.indexOf("i") >= 0) { var ii = h("i"); ii.appendChild(node); node = ii; }
       if (f.indexOf("b") >= 0) { var bb = h("b"); bb.appendChild(node); node = bb; }
-      if (r[2]) { var aa = h("a", { href: r[2], target: "_blank", rel: "noopener" }); aa.appendChild(node); node = aa; }
+      if (r[2]) { var aa = h("a", { href: r[2], target: "_blank", rel: "noopener", title: r[2] }); aa.appendChild(node); node = aa; }
       el.appendChild(node);
     });
   }
@@ -851,6 +897,12 @@
       var tag = { h1: "h1", h2: "h2", h3: "h3", q: "blockquote" }[b.t] || "p";
       var el = h(tag, { class: [b.t === "sig" ? "sig" : b.t === "n" ? "note" : "", b.c ? "c" : ""].join(" ").trim() || null });
       runsTo(el, b.r);
+      if (b.t === "n") {
+        // les notes de travail (clips, images, sources) : des étiquettes qu'on ne tape pas par erreur
+        var nt = el.textContent;
+        el.setAttribute("data-k", /^\[Vid/.test(nt) ? "clip" : /^\[Contenu/.test(nt) ? "son" : /^\[Image/.test(nt) ? "image" : /^Source/.test(nt) ? "source" : /^Légende/.test(nt) ? "legende" : "autre");
+        el.setAttribute("contenteditable", "false");
+      }
       root.appendChild(el);
     });
   }
@@ -960,9 +1012,22 @@
     gram: { lab: "Grammaire", one: "Grammaire" },
     typo: { lab: "Typographie", one: "Typographie" },
     rep: { lab: "Répétitions", one: "Répétition" },
-    form: { lab: "Formulation", one: "Formulation" }
+    form: { lab: "Formulation", one: "Formulation" },
+    web: { lab: "Pensé pour le web", one: "Pensé pour le web" }
   };
-  var CK_ORDER = ["ortho", "gram", "typo", "rep", "form"];
+  var CK_ORDER = ["ortho", "gram", "typo", "rep", "form", "web"];
+  // ce qui ne marche que sur une page web : renvois à un lien, à une vidéo, aux lecteurs du site
+  var CK_WEB = [
+    [/\b(?:cliquez|cliquer|clique|cliqué)\b(?: (?:ici|là|dessus|sur (?:ce|le) lien))?/gi, "Renvoi vers un lien : sur papier, on ne peut plus cliquer."],
+    [/\bci-dessous\b|\bjuste en dessous\b|\bla vidéo suivante\b/gi, "Renvoi à un clip ou un lien de la page web, qui ne sera pas dans le livre."],
+    [/\bci-dessus\b/gi, "« Ci-dessus » renvoyait peut-être à un clip ou une image de la page web : à vérifier."],
+    [/\b(?:je vous (?:mets|laisse|partage)|voici|retrouvez|découvrez)(?: ici)? (?:le|ce|un|les|mon) (?:lien|clip|vidéo)s?\b/gi, "Annonce d’un lien ou d’une vidéo qui ne sera pas sur le papier."],
+    [/\b(?:ce|le|un) lien\b|\blien en bio\b/gi, "Mention d’un lien : sur papier, il ne mène nulle part."],
+    [/\b(?:abonnez-vous|suivez[- ]nous|partagez (?:l’|l')?(?:article|cet article)|laissez(?:-nous)? un commentaire|en commentaires?)\b/gi, "Appel aux lecteurs du site : n’a plus de sens dans un livre."],
+    [/\b(?:sur (?:notre|le) site|sur cul7ure\.fr|en bas de (?:l’|l')article|plus bas dans (?:l’|l')article)\b/gi, "Renvoi au site Cul7ure ou à la page web : à reformuler pour le livre."]
+  ];
+  CK_WEB.forEach(function (w) { w[0] = new RegExp("(?<![\\p{L}\\p{N}])(?:" + w[0].source.replace(/\\b/g, "") + ")(?![\\p{L}\\p{N}])", "giu"); });
+  var CK_ANCRE = /^(?:ici|là|ce lien|le lien|lien|cet article|l’article|l'article|cliquez ici|ce clip|cette vidéo|cette interview|ce tweet|ce post)[.!]?$/i;
   var CK_HL = !!(window.CSS && CSS.highlights && window.Highlight);
   var LT_URL = "https://api.languagetool.org/v2/check";
   // règles qui font du bruit sur des textes rap (ou que le site gère déjà)
@@ -1047,14 +1112,20 @@
     var out = [];
     ed.querySelectorAll("p,h1,h2,h3,blockquote,li").forEach(function (bl) {
       if (bl.querySelector("p,h1,h2,h3,blockquote,li")) return;
-      var segs = [], text = "", tw = document.createTreeWalker(bl, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT), n;
+      var segs = [], text = "", links = [], tw = document.createTreeWalker(bl, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT), n;
       while ((n = tw.nextNode())) {
         if (n.nodeType === 1) { if (n.tagName === "BR") text += "\n"; continue; }
         segs.push({ n: n, s: text.length });
+        var an = n.parentElement && n.parentElement.closest("a");
+        if (an && bl.contains(an)) {
+          var lk = links[links.length - 1];
+          if (lk && lk.a === an && lk.e === text.length) lk.e += n.nodeValue.length;
+          else links.push({ a: an, s: text.length, e: text.length + n.nodeValue.length });
+        }
         text += n.nodeValue;
       }
       if (bl.classList.contains("note")) return; // notes de travail : [Image…], Source…
-      out.push({ el: bl, text: text, segs: segs, q: !!bl.closest("blockquote"), quotes: ckQuotes(text) });
+      out.push({ el: bl, text: text, segs: segs, links: links, q: !!bl.closest("blockquote"), quotes: ckQuotes(text) });
     });
     return out;
   }
@@ -1103,6 +1174,7 @@
       if (ign.indexOf(it.key) >= 0) return;
       it.r = ckRange(blocks[it.b], it.s, it.e);
       it.bt = blocks[it.b].text;
+      it.blk = blocks[it.b];
       if (it.r) out.push(it);
     }
     blocks.forEach(function (b, bi) {
@@ -1124,6 +1196,27 @@
         push({ k: m.k, b: bi, s: m.o, e: m.o + m.l, txt: w, msg: m.msg, reps: m.reps, rule: m.id });
       });
       if (b.q) return;
+      // pensé pour le web
+      var isHead = /^H[1-6]$/.test(b.el.tagName);
+      var linkedLen = b.links.reduce(function (n2, l) { return n2 + l.e - l.s; }, 0);
+      if (!isHead && b.links.length && b.text.replace(/[\s.:,;!?–—\-()«»"]/g, "").length - b.links.reduce(function (n2, l) { return n2 + b.text.slice(l.s, l.e).replace(/[\s.:,;!?–—\-()«»"]/g, "").length; }, 0) < 3) {
+        push({ k: "web", b: bi, s: 0, e: b.text.length, txt: b.text.slice(0, 40), msg: "Ce paragraphe n’est qu’un lien : sur le site, il menait vers une vidéo ou un autre article. Sur papier, il ne sert plus.", reps: [], acts: ["delpar"], rule: "seul" });
+      } else {
+        var wm, ure = /(?:https?:\/\/|www\.)[^\s«»"]+/g;
+        while ((wm = ure.exec(b.text))) push({ k: "web", b: bi, s: wm.index, e: wm.index + wm[0].replace(/[.,;:)]+$/, "").length, txt: wm[0], msg: "Une adresse web dans le texte : elle partira dans la sitographie, inutile de la garder ici.", reps: [""], rule: "url" });
+        b.links.forEach(function (l) {
+          var lt = b.text.slice(l.s, l.e).trim();
+          if (CK_ANCRE.test(lt)) push({ k: "web", b: bi, s: l.s, e: l.e, txt: lt, msg: "Le lien « " + lt + " » : sur papier, le mot ne renvoie plus à rien. Mieux vaut nommer ce qu’il y avait derrière, ou couper la phrase.", reps: [], acts: ["delsent"], rule: "ancre" });
+        });
+        CK_WEB.forEach(function (wr) {
+          wr[0].lastIndex = 0;
+          var mm2;
+          while ((mm2 = wr[0].exec(b.text))) {
+            if (ckInQuote(b, mm2.index)) continue;
+            push({ k: "web", b: bi, s: mm2.index, e: mm2.index + mm2[0].length, txt: mm2[0], msg: wr[1], reps: [], acts: ["delsent"], rule: "web" });
+          }
+        });
+      }
       // tournures lourdes
       CK_TICS.forEach(function (tc) {
         tc[0].lastIndex = 0;
@@ -1170,7 +1263,7 @@
     });
     out.forEach(function (it) { if (it.prev) it.prevR = ckRange(blocks[it.prev.b], it.prev.s, it.prev.s + it.prev.w.length); });
     // une même portée signalée deux fois : on garde la remarque la plus précise
-    var prio = { ortho: 0, gram: 1, typo: 2, form: 3, rep: 4 }, best = {};
+    var prio = { web: 0, ortho: 1, gram: 2, typo: 3, form: 4, rep: 5 }, best = {};
     out.forEach(function (it) {
       var k2 = it.b + ":" + it.s + ":" + it.e;
       if (!best[k2] || prio[it.k] < prio[best[k2].k] || (prio[it.k] === prio[best[k2].k] && it.rule === "tic")) best[k2] = it;
@@ -1268,6 +1361,9 @@
     });
     box.appendChild(chips);
     if (ckVisible().length) box.appendChild(h("button", { class: "btn ghost sm wide", type: "button", text: "Passer les remarques en revue", onclick: function () { ckNext(1); } }));
+    var nl = 0, nv = 0;
+    CK.ed.querySelectorAll("a[href]").forEach(function (an) { if (an.closest("p.note")) nv++; else nl++; });
+    if (nl || nv) box.appendChild(h("p", { class: "small ck-links", text: [nl ? plur(nl, "lien") + " dans le texte" : "", nv ? plur(nv, "clip") + " (notes ▶)" : ""].filter(Boolean).join(" et ") + " : ils restent dans le Google Doc, et l’export pour le livre les range dans la sitographie. Rien à faire, sauf quand le texte en parle (« cliquez ici », « ci-dessous »)." }));
     var d = ckDico();
     var foot = h("p", { class: "small ck-foot" }, "Orthographe, grammaire et style par LanguageTool (le texte est envoyé à leur service en ligne). ");
     if (d.length) foot.appendChild(h("button", { class: "lnk", type: "button", text: "Ton dictionnaire : " + plur(d.length, "mot"), onclick: ckDicoDlg }));
@@ -1354,6 +1450,25 @@
           h("span", { class: "go", text: rep === "" ? "Supprimer" : "Remplacer" })));
       });
       pop.appendChild(rw);
+    } else if (it.acts && it.acts.length) {
+      pop.appendChild(h("p", { class: "ck-lab", text: "Ce que ça donnerait :" }));
+      var ra = h("div", { class: "ck-opts" });
+      it.acts.forEach(function (act) {
+        var t0 = it.bt || "", pv;
+        if (act === "delpar") pv = h("span", { class: "pv" }, h("del", { text: t0.length > 160 ? t0.slice(0, 150) + "…" : t0 }));
+        else {
+          var bd = ckSent(t0, it.s, it.e), sent = t0.slice(bd[0], bd[1]).trim();
+          if (sent.length > 170) sent = sent.slice(0, 95) + " … " + sent.slice(-55);
+          var before = t0.slice(Math.max(0, bd[0] - 70), bd[0]), after = t0.slice(bd[1], bd[1] + 70);
+          if (bd[0] > 70) before = "…" + before.slice(before.indexOf(" ") + 1);
+          if (bd[1] + 70 < t0.length) after = after.slice(0, after.lastIndexOf(" ")) + "…";
+          pv = h("span", { class: "pv" }, before, h("del", { text: sent }), " " + after);
+        }
+        ra.appendChild(h("button", { type: "button", class: "ck-opt", onclick: function () { ckAct(it, act); } }, pv,
+          h("span", { class: "go", text: act === "delpar" ? "Supprimer le paragraphe" : "Supprimer la phrase" })));
+      });
+      pop.appendChild(ra);
+      pop.appendChild(h("p", { class: "ck-lab", text: "Si la phrase dit autre chose d’utile, « Je reformule » la garde et te laisse la réécrire." }));
     } else {
       pop.appendChild(h("p", { class: "ck-lab", text: "Pas de remplacement automatique ici : la phrase est à reformuler à la main." }));
     }
@@ -1421,6 +1536,32 @@
     ckRun();
     // on enchaîne sur la remarque suivante
     for (var i = 0; i < CK.issues.length; i++) { var x = CK.issues[i]; if (!CK.hide[x.k] && (x.b > b || (x.b === b && x.s > s))) { ckOpen(i, true); return; } }
+  }
+  function ckSent(t, s, e) {
+    var a = s, z = e;
+    while (a > 0 && !/[.!?…\n]/.test(t[a - 1])) a--;
+    while (a < s && /\s/.test(t[a])) a++;
+    while (z < t.length && !/[.!?…\n]/.test(t[z])) z++;
+    while (z < t.length && /[.!?…»"”)]/.test(t[z])) z++;
+    while (z < t.length && /[ \u00a0\u202f]/.test(t[z])) z++;
+    return [a, z];
+  }
+  function ckAct(it, act) {
+    if (!CK.ed || !it.blk) return;
+    var sel = window.getSelection(), r, el = it.blk.el;
+    if (act === "delpar") { r = document.createRange(); r.selectNode(el); }
+    else { var bd = ckSent(it.bt || "", it.s, it.e); r = ckRange(it.blk, bd[0], bd[1]); }
+    if (!r) return;
+    var b = it.b, s = it.s;
+    CK.ed.focus();
+    sel.removeAllRanges(); sel.addRange(r);
+    document.execCommand("delete");
+    if (el.isConnected && !el.textContent.trim() && el.parentNode === CK.ed) el.remove();
+    markDirty();
+    ckClose();
+    clearTimeout(CK.t);
+    ckRun();
+    for (var i = 0; i < CK.issues.length; i++) { var x = CK.issues[i]; if (!CK.hide[x.k] && (x.b > b || (x.b === b && x.s >= s))) { ckOpen(i, true); return; } }
   }
   function ckIgnore(it) {
     var all = ckIgn(), l = all[ED.id] || [];
@@ -1773,7 +1914,9 @@
     h3: [6, "Sous-intertitre", "\\ql\\sb200\\sa80\\keepn\\f1\\fs24\\b"],
     q: [7, "Citation", "\\ql\\li567\\ri567\\sb120\\sa160\\f0\\fs26\\i"],
     li: [8, "Liste", "\\ql\\fi-284\\li284\\sa60\\f0\\fs22"],
-    n: [9, "Note de travail", "\\ql\\sa120\\f1\\fs16\\cf2"]
+    n: [9, "Note de travail", "\\ql\\sa120\\f1\\fs16\\cf2"],
+    sitot: [10, "Sitographie titre", "\\ql\\sb360\\sa120\\keepn\\f1\\fs20\\b"],
+    sito: [11, "Sitographie", "\\ql\\fi-284\\li284\\sa60\\f1\\fs17"]
   };
   function rtfEsc(s) {
     var o = "";
@@ -1808,6 +1951,39 @@
       "\\paperw11906\\paperh16838\\margl1418\\margr1418\\margt1418\\margb1418\\widowctrl\n" +
       parts.join("") + "}";
   }
+  // les liens et les clips d'un article, pour la sitographie
+  function sitoUrl(u) { return String(u || "").replace(/^https?:\/\/web\.archive\.org\/web\/\d+[a-z_]*\//, "").replace(/^http:\/\//, "https://"); }
+  function sitoArticle(u) {
+    var m = sitoUrl(u).match(/cul7ure\.fr\/([a-z-]+\/[^/?#]+)/);
+    return m ? byId(m[1]) : null;
+  }
+  function sitoListe(d) {
+    var out = [], vus = {};
+    ((d && d.blocs) || []).forEach(function (b) {
+      var txt = b.r.map(function (r) { return r[0]; }).join("");
+      if (b.t === "n") {
+        var mv = txt.match(/^\[(?:Vidéo YouTube|Contenu intégré)\s*:\s*(.+?)\]?$/);
+        var url = (b.r.filter(function (r) { return r[2]; })[0] || [])[2] || "";
+        if (mv && url && !vus[url]) { vus[url] = 1; out.push({ k: "clip", t: mv[1].replace(/^Spotify Embed:\s*/, ""), u: sitoUrl(url) }); }
+        return;
+      }
+      b.r.forEach(function (r) {
+        if (!r[2] || vus[r[2]]) return;
+        vus[r[2]] = 1;
+        var art = sitoArticle(r[2]);
+        if (art) out.push({ k: "renvoi", t: art.titre, u: "", a: art });
+        else out.push({ k: "lien", t: r[0].trim(), u: sitoUrl(r[2]) });
+      });
+    });
+    return out;
+  }
+  function rtfSito(items) {
+    var lab = { clip: "Clip", lien: "Lien", renvoi: "À lire aussi" };
+    return items.map(function (x) {
+      if (x.k === "renvoi") return rtfPar("sito", [["À lire aussi : ", "b"], ["« " + x.t + " »" + (x.a && x.a.date ? ", " + moisAn(x.a.date) : "")]]);
+      return rtfPar("sito", [[lab[x.k] + " : ", "b"], [x.t && x.t !== x.u ? x.t + " — " : ""], [x.u]]);
+    }).join("");
+  }
   function rtfArticle(a, d, o, first) {
     var bl = (d && d.blocs) || [], out = "", pb = first ? "" : o.page ? "\\pagebb" : "\\sb720";
     var h1 = null;
@@ -1823,10 +1999,14 @@
       }
       out += rtfPar(b.t === "h1" ? "h2" : b.t, b.r, b.c ? "\\qc" : "");
     });
+    if (o.sito === "fin") {
+      var items = sitoListe(d);
+      if (items.length) out += rtfPar("sitot", [["À écouter, à voir, à lire"]]) + rtfSito(items);
+    }
     return out;
   }
   var EXP = { busy: false, n: 0, total: 0, label: "", fails: [] };
-  try { EXP.o = Object.assign({ page: true, notes: true, scope: "dedans" }, JSON.parse(ls("exp") || "{}")); } catch (e) { EXP.o = { page: true, notes: true, scope: "dedans" }; }
+  try { EXP.o = Object.assign({ page: true, notes: false, scope: "dedans", sito: "annexe" }, JSON.parse(ls("exp2") || "{}")); } catch (e) { EXP.o = { page: true, notes: false, scope: "dedans", sito: "annexe" }; }
   function expRender() {
     var box = $("expProg");
     if (!box) return;
@@ -1869,6 +2049,14 @@
         else parts.push(rtfPar("n", [["[Texte non récupéré : " + a.titre + "]"]], o.page && !start ? "\\pagebb" : ""));
         start = false;
       });
+      if (o.sito === "annexe") {
+        var annexe = [];
+        list.forEach(function (a, i) {
+          var items = res[i] ? sitoListe(res[i]) : [];
+          if (items.length) annexe.push(rtfPar("sitot", [[a.titre + (a.date ? " (" + moisAn(a.date) + ")" : "")]]) + rtfSito(items));
+        });
+        if (annexe.length) parts.push(rtfPar("chap", [["Sitographie"]], "\\pagebb") + annexe.join(""));
+      }
       var blob = new Blob([rtfDoc(parts, "Cul7ure · " + label)], { type: "application/rtf" });
       var url = URL.createObjectURL(blob), dl = h("a", { href: url, download: fname });
       document.body.appendChild(dl); dl.click(); dl.remove();
@@ -1889,16 +2077,23 @@
     var seg = h("div", { class: "seg", role: "group", "aria-label": "Articles à exporter" });
     Object.keys(scopes).forEach(function (k) {
       seg.appendChild(h("button", { type: "button", class: k === o.scope ? "on" : null, "aria-pressed": k === o.scope ? "true" : "false",
-        onclick: function () { o.scope = k; ls("exp", JSON.stringify(o)); render(true); } }, scopes[k].lab + " ", h("span", { class: "tab", text: nf.format(scopes[k].list.length) })));
+        onclick: function () { o.scope = k; ls("exp2", JSON.stringify(o)); render(true); } }, scopes[k].lab + " ", h("span", { class: "tab", text: nf.format(scopes[k].list.length) })));
     });
     card.appendChild(seg);
     function opt(key, lab) {
       var cb = h("input", { type: "checkbox" });
       cb.checked = !!o[key];
-      cb.addEventListener("change", function () { o[key] = cb.checked; ls("exp", JSON.stringify(o)); });
+      cb.addEventListener("change", function () { o[key] = cb.checked; ls("exp2", JSON.stringify(o)); });
       return h("label", { class: "chk" }, cb, h("span", { text: lab }));
     }
-    card.appendChild(h("div", { class: "opts" }, opt("page", "Chaque article sur une nouvelle page"), opt("notes", "Garder les notes de travail (images, vidéos, sources)")));
+    card.appendChild(h("div", { class: "opts" }, opt("page", "Chaque article sur une nouvelle page"), opt("notes", "Garder les notes de travail dans le texte (emplacements des images, clips, sources)")));
+    var sseg = h("div", { class: "seg", role: "group", "aria-label": "Liens et clips" });
+    [["annexe", "Sitographie à la fin du fichier"], ["fin", "À la fin de chaque article"], ["non", "Nulle part"]].forEach(function (x) {
+      sseg.appendChild(h("button", { type: "button", class: o.sito === x[0] ? "on" : null, "aria-pressed": o.sito === x[0] ? "true" : "false",
+        onclick: function () { o.sito = x[0]; ls("exp2", JSON.stringify(o)); render(true); } }, x[1]));
+    });
+    card.appendChild(h("p", { class: "small", style: "margin:2px 0 8px", text: "Les liens et les clips sortent du texte : où les ranger ?" }));
+    card.appendChild(sseg);
     var parAn = {};
     L.forEach(function (a) { (parAn[a.annee || "Sans date"] = parAn[a.annee || "Sans date"] || []).push(a); });
     var btns = h("div", { class: "exp-btns" });
@@ -2257,56 +2452,6 @@
   $("dicoEdit").addEventListener("click", function () { ckDicoDlg(); openSettings(false); });
 
 
-  // ------------------------------------------------------------------ les lucioles du fond (comme sur Osmose)
-  (function lucioles() {
-    var cv = $("lucioles");
-    if (!cv || !cv.getContext) return;
-    var cx = cv.getContext("2d"), W = 0, H = 0, dpr = 1, pts = [], last = 0, raf = 0;
-    var calme = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    function taille() {
-      dpr = Math.min(2, window.devicePixelRatio || 1);
-      W = window.innerWidth; H = window.innerHeight;
-      cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
-      cx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      var n = W < 760 ? 16 : 30;
-      while (pts.length < n) pts.push({ x: Math.random() * W, y: Math.random() * H, vx: (Math.random() - .5) * .14, vy: -.04 - Math.random() * .1, r: .8 + Math.random() * 1.5, ph: Math.random() * 6.28, sp: .4 + Math.random() * .8 });
-      pts.length = n;
-    }
-    function dessine(t) {
-      cx.clearRect(0, 0, W, H);
-      cx.globalCompositeOperation = "lighter";
-      pts.forEach(function (p) {
-        var a = .25 + .55 * (0.5 + 0.5 * Math.sin(p.ph + t * .001 * p.sp));
-        var g = cx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 7);
-        g.addColorStop(0, "rgba(124,247,221," + (a * .55).toFixed(3) + ")");
-        g.addColorStop(1, "rgba(124,247,221,0)");
-        cx.fillStyle = g;
-        cx.beginPath(); cx.arc(p.x, p.y, p.r * 7, 0, 6.283); cx.fill();
-        cx.fillStyle = "rgba(220,255,244," + a.toFixed(3) + ")";
-        cx.beginPath(); cx.arc(p.x, p.y, p.r * .7, 0, 6.283); cx.fill();
-      });
-      cx.globalCompositeOperation = "source-over";
-    }
-    function bouge(t) {
-      raf = requestAnimationFrame(bouge);
-      if (t - last < 33) return; // 30 images par seconde suffisent
-      var dt = Math.min(3, (t - last) / 16.7); last = t;
-      pts.forEach(function (p) {
-        p.x += (p.vx + Math.sin(p.ph + t * .0003) * .05) * dt; p.y += p.vy * dt;
-        if (p.y < -20) { p.y = H + 20; p.x = Math.random() * W; }
-        if (p.x < -20) p.x = W + 20; else if (p.x > W + 20) p.x = -20;
-      });
-      dessine(t);
-    }
-    taille();
-    window.addEventListener("resize", function () { taille(); if (calme) dessine(0); });
-    if (calme) { dessine(0); return; }
-    raf = requestAnimationFrame(bouge);
-    document.addEventListener("visibilitychange", function () {
-      cancelAnimationFrame(raf);
-      if (document.visibilityState === "visible") { last = 0; raf = requestAnimationFrame(bouge); }
-    });
-  })();
   // ------------------------------------------------------------------ branchements
   window.addEventListener("hashchange", route);
   window.addEventListener("scroll", hideTip, { passive: true });
