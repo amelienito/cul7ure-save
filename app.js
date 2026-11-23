@@ -2624,3 +2624,15 @@
   STARTED = true;
   load().catch(function (e) { if (e.code) { openSettings(false); dlgMsg("dlgErr", "Le code d’accès a été refusé : vérifie-le."); } });
 })();
+
+(function () {
+  var b = document.getElementById("theme");
+  if (!b) return;
+  b.addEventListener("click", function () {
+    var d = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = d;
+    try { localStorage.setItem("cul7ure_theme", d); } catch (e) {}
+    var m = document.querySelector('meta[name=theme-color]');
+    if (m) m.content = d === "dark" ? "#0C0C0E" : "#FBFBF9";
+  });
+})();
