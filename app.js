@@ -124,7 +124,6 @@
     var d = { l: "M12.5 4.5L7 10l5.5 5.5", r: "M7.5 4.5L13 10l-5.5 5.5", u: "M4.5 12.5L10 7l5.5 5.5", d: "M4.5 7.5L10 13l5.5-5.5" }[dir];
     return svgFrom('<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + d + '"/></svg>');
   }
-  function iPlay() { return svgFrom('<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 3.9v12.2c0 .7.8 1.1 1.4.7l9.6-6.1c.5-.3.5-1.1 0-1.4L7.4 3.2C6.8 2.8 6 3.2 6 3.9z" fill="currentColor"/></svg>'); }
   function svgFrom(str) { var t = document.createElement("template"); t.innerHTML = str; return t.content.firstChild; }
   function iLink() { return svgFrom('<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M9 3h4v4M13 3L7.5 8.5M11 9.5V13H3V5h3.5"/></svg>'); }
   function iCheck() { return svgFrom('<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 6.3l2.2 2.2 4.8-5"/></svg>'); }
@@ -545,7 +544,7 @@
           h("button", { class: "btn main sm", type: "button", text: "Envoyer le lien à " + o, onclick: function () { shareInvite(o); } }),
           h("button", { class: "lnk", type: "button", text: "C’est fait, masquer", onclick: function () { ls("invite-" + o, "1"); render(true); } }))));
     }
-    // l'écran de sélection : la pochette du disque choisi, la liste à côté
+    // l'article sélectionné à gauche, la file à droite
     if (q.length) {
       var left = h("div", { class: "pick-l" });
       var wh = h("ol", { class: "wheel" });
@@ -579,7 +578,7 @@
     var r = L.filter(function (a) { return a.statut === "relu"; }).length;
     var seg = h("div", { class: "g-seg", role: "img", "aria-label": label + " : " + r + " relus sur " + L.length });
     L.forEach(function (a) {
-      seg.appendChild(h("i", { class: a.statut === "relu" ? "r" : a.statut === "cours" ? "c" : null, title: catNo(a) + " : " + a.titre + (a.statut === "relu" ? " (relu)" : a.statut === "cours" ? " (en cours)" : ""), "data-id": a.id }));
+      seg.appendChild(h("i", { class: a.statut === "relu" ? "r" : a.statut === "cours" ? "c" : null, title: a.titre + (a.statut === "relu" ? " (relu)" : a.statut === "cours" ? " (en cours)" : ""), "data-id": a.id }));
     });
     seg.addEventListener("click", function (e) {
       var t = e.target.closest("i[data-id]");
@@ -589,7 +588,7 @@
       h("div", { class: "g-head" }, h("b", { text: label }), h("span", { class: "g-n tab" }, String(r), h("small", { text: " / " + L.length + " relus" }))),
       seg);
   }
-  // la pochette du disque sélectionné, et ce qu'il faut savoir avant de l'ouvrir
+  // l'aperçu de l'article sélectionné
   function pickInfo(a, label) {
     var r = rubOf(a.rub);
     var ex = a.extrait ? (a.extrait.length > 240 ? a.extrait.slice(0, 230).replace(/\s+\S*$/, "") + "…" : a.extrait) : "";
@@ -607,38 +606,25 @@
     if (!box || !a || box.dataset.id === a.id) return;
     box.dataset.id = a.id;
     clear(box);
-    box.appendChild(tilt(h("a", { class: "pick-jk", href: link(a.id), onclick: openWith(ids), tabindex: "-1", "aria-hidden": "true" }, jacket(a))));
     box.appendChild(pickInfo(a, home ? (a.statut === "cours" ? "À reprendre" : "À relire") : statusLabel(a)));
     if (home) box.appendChild(h("div", { class: "pick-cta" },
-      h("a", { class: "btn nacre big", href: link(a.id), onclick: openWith(ids) }, iPlay(), a.statut === "cours" ? "Reprendre la lecture" : "Lire cet article"),
+      h("a", { class: "btn main big", href: link(a.id), onclick: openWith(ids) }, a.statut === "cours" ? "Reprendre la correction" : "Corriger cet article"),
       KEYS ? h("span", { class: "small" }, h("kbd", { text: "Entrée" })) : null));
     else if (a.noms && a.noms.length) box.appendChild(h("p", { class: "small", style: "margin:0", text: "On y croise " + a.noms.slice(0, 6).join(", ") + (a.noms.length > 6 ? "…" : "") }));
   }
-  // la pochette suit la souris, comme un boîtier qu'on tient en main : le reflet glisse sur le plastique
-  function tilt(el) {
-    if (!KEYS || (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches)) return el;
-    el.addEventListener("pointermove", function (e) {
-      var r = el.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5;
-      el.style.transform = "perspective(900px) rotateY(" + (x * 7).toFixed(2) + "deg) rotateX(" + (-y * 7).toFixed(2) + "deg)";
-      el.style.setProperty("--gx", (50 + x * 60).toFixed(1) + "%");
-    });
-    el.addEventListener("pointerleave", function () { el.style.transform = ""; el.style.removeProperty("--gx"); });
-    return el;
-  }
-  // une piste : une ligne de la sélection
+
+  // une ligne de la liste
   function trackEl(a, ids) {
     var r = rubOf(a.rub);
     var st = h("span", { class: "trk-s" }, statusChip(a));
     if (a.livre && a.livre !== "attente") st.appendChild(h("span", { class: "chip " + { dedans: "in", discuter: "disc", ecarte: "out" }[a.livre], text: LIVRE[a.livre].one }));
     if (a.tags.length && a.tags[0] !== "introuvable") st.appendChild(h("span", { class: "chip" }, icon(TAGS[a.tags[0]].st, 14), TAGS[a.tags[0]].court));
     return h("a", { class: "trk", href: link(a.id), onclick: openWith(ids), "data-id": a.id, "data-sel": "", style: "--c:" + r.hex },
-      h("span", { class: "trk-n", html: "<small>C7-</small>" + pad3(numOf(a)) }),
       h("span", { class: "trk-b" },
         h("span", { class: "trk-t", text: a.titre }),
         h("span", { class: "trk-m" }, h("span", { text: rubOne(a) }), h("span", { text: moisAn(a.date) }), h("span", { text: "par " + (a.auteur || "?") }))),
       st,
-      h("span", { class: "trk-d", text: a.mots ? duree(a.mots) : "" }),
-      h("span", { class: "go", "aria-hidden": "true" }));
+      h("span", { class: "trk-d", text: a.mots ? minLecture(a) + " min" : "" }));
   }
 
   // ------------------------------------------------------------------ sélection au clavier (accueil et liste)
@@ -652,7 +638,7 @@
     box.addEventListener("focusin", function (e) { var t = e.target.closest && e.target.closest("[data-sel]"); if (t) selSet(selItems().indexOf(t), false); });
     selSet(0, false);
   }
-  // au doigt, pas de ligne surlignée en permanence : seule la pochette suit
+  // au doigt, pas de ligne surlignée en permanence : seul l'aperçu suit
   function selMark() { return KEYS; }
   function selSet(i, scroll) {
     var it = selItems();
@@ -701,38 +687,9 @@
     if ((V.name === "home" || V.name === "livre") && (e.key === "v" || e.key === "V") && free) { e.preventDefault(); openTri(); }
   });
 
-  // le temps de lecture, écrit comme la durée d'un morceau
-  function duree(mots) { var s = Math.max(20, Math.round((mots || 0) / 250 * 60)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); }
   function dureeTotale(mots) { var m = Math.round((mots || 0) / 250); return m >= 60 ? Math.floor(m / 60) + " h " + String(m % 60).padStart(2, "0") : m + " min"; }
-  function pad3(n) { return String(n).padStart(3, "0"); }
-  // le numéro de catalogue : l'ordre de parution, comme sur la tranche d'un CD
-  var NUMC = { all: null, m: {} };
-  function numOf(a) {
-    if (NUMC.all !== ALL) { NUMC = { all: ALL, m: {} }; ALL.forEach(function (x, i) { NUMC.m[x.id] = i + 1; }); }
-    return NUMC.m[a.id] || 0;
-  }
-  function catNo(a) { return "C7-" + pad3(numOf(a)); }
-  function rubKey(a) { return fold(rubOf(a.rub).k).replace(/[^a-z]/g, ""); }
   function rubOne(a) { return (a.rub || "Article").replace(/s$/, ""); }
-  var JK_STOP = {};
-  "et le la les l un une des du de d quand pourquoi comment si mais interview dans au aux en ce cette ces a on il elle ils nous vous qui que quoi rap focus zoom top bilan retour".split(" ").forEach(function (w) { JK_STOP[w] = 1; });
-  // la pochette : un motif par rubrique, l'obi sur la tranche, le titre en bas
-  function jacket(a, o) {
-    o = o || {};
-    var r = rubOf(a.rub), t = a.titre || "", n = t.length;
-    // l'initiale de l'artiste du titre (sinon, du premier mot du titre)
-    var ft = fold(t), qui = (a.noms || []).filter(function (x) { return x.length > 1 && ft.indexOf(fold(x)) >= 0; })[0];
-    if (!qui) qui = t.split(/[\s,:–—-]+/).filter(function (w) { return /^[A-ZÀ-ÝŒ0-9]/.test(w) && !JK_STOP[fold(w)]; })[0] || t;
-    var lettre = qui.replace(/^[^A-Za-zÀ-ÿ0-9]+/, "").charAt(0).toUpperCase() || "7";
-    // la taille du titre : selon sa longueur, et pour que le mot le plus long tienne sur une ligne
-    var mot = Math.max.apply(null, t.split(/\s+/).map(function (w) { return w.length; }).concat([1]));
-    var fs = Math.min(n < 22 ? 9.8 : n < 44 ? 7.8 : n < 70 ? 6.4 : 5.4, 88 / mot);
-    return h("div", { class: "jk jk-" + rubKey(a) + (o.mini ? " mini" : ""), style: "--c:" + r.hex, "aria-hidden": "true" },
-      h("div", { class: "jk-art", "data-l": lettre }),
-      h("div", { class: "jk-obi" }, h("em", { html: "Cul<b>7</b>ure" }), h("span", { text: rubOne(a) }), h("b", { text: catNo(a) })),
-      h("div", { class: "jk-t", style: "font-size:" + fs.toFixed(2) + "cqw", text: t }),
-      h("div", { class: "jk-sheen" }));
-  }
+
 
   function codeCard() {
     var inp = h("input", { class: "inp", type: "text", placeholder: "Le code à 6 caractères", autocomplete: "off", autocapitalize: "off", spellcheck: "false", "aria-label": "Code d’accès", style: "max-width:260px" });
@@ -862,7 +819,7 @@
     if (p.livre) tag(p.livre === "sansmoi" ? "Sans mon vote" : LIVRE[p.livre] ? LIVRE[p.livre].lab : p.livre, "livre");
     if (p.rub) tag(p.rub, "rub");
     root.appendChild(act);
-    // l'écran de sélection : la pochette de l'article choisi à gauche, les pistes à droite
+    // l'aperçu de l'article sélectionné à gauche, la liste à droite
     var main = h("div", { class: "list-main" },
       h("div", { class: "items", id: "items" }),
       h("div", { class: "more-btn", id: "moreBtn" }));
@@ -931,15 +888,11 @@
       h("a", { class: "navbtn", href: prev ? link(prev) : "#", "aria-label": "Article précédent", title: "Article précédent", "aria-disabled": prev ? null : "true" }, chev("l")),
       h("a", { class: "navbtn", href: next ? link(next) : "#", "aria-label": "Article suivant", title: "Article suivant", "aria-disabled": next ? null : "true" }, chev("r"))));
     var r = rubOf(a.rub);
-    // l'obi : la bande de papier qui entoure la tranche du boîtier, avec la fiche du disque
-    var obi = h("aside", { class: "obi", "aria-label": "Fiche de l’article" }, h("div", { class: "obi-in" },
-      h("span", { class: "sw", style: "background:" + r.hex }),
-      h("span", { class: "o-n", text: catNo(a) }),
-      h("span", { class: "o-t", text: rubOne(a) }),
-      h("span", { class: "o-m", text: moisAn(a.date) }),
-      h("span", { class: "o-m", text: "par " + (a.auteur || "auteur inconnu") }),
-      a.mots ? h("span", { class: "o-m tab", text: nf.format(a.mots) + " mots" }) : null));
-    var paper = h("article", { class: "paper", id: "paper" }, obi,
+    var meta = h("div", { class: "art-meta" },
+      h("span", { class: "rb" }, h("span", { class: "sw", style: "background:" + r.hex }), rubOne(a)),
+      h("span", { text: moisAn(a.date) }), h("span", { text: "par " + (a.auteur || "auteur inconnu") }),
+      a.mots ? h("span", { class: "tab", text: nf.format(a.mots) + " mots, ≈ " + minLecture(a) + " min" }) : null);
+    var paper = h("article", { class: "paper", id: "paper" }, meta,
       h("div", { id: "probs" }),
       h("div", { id: "edwrap" }));
     root.appendChild(h("div", { class: "art-grid" }, paper, h("aside", { class: "side", id: "side", "aria-label": "Relecture et vote" })));
@@ -2059,7 +2012,7 @@
     clear(bar);
     bar.appendChild(saveLine(true));
     if (a.manquant) return;
-    if (a.statut !== "relu") bar.appendChild(h("button", { class: "btn nacre", type: "button", onclick: onRelu }, iCheck(), "C’est relu"));
+    if (a.statut !== "relu") bar.appendChild(h("button", { class: "btn good", type: "button", onclick: onRelu }, iCheck(), "C’est relu"));
     else if (ED.next) bar.appendChild(h("a", { class: "btn main", href: link(ED.next) }, "Suivant", chev("r")));
   }
   function onRelu() {
@@ -2129,7 +2082,7 @@
     else st = h("div", { class: "st" }, icon("todo", 22), h("div", {}, "À relire", h("small", { text: who ? "par " + who : "Personne n’est désigné" })));
     var b1 = h("section", { class: "box relec" }, h("h3", { text: "La relecture" }), st);
     if (!a.manquant) {
-      if (a.statut !== "relu") b1.appendChild(h("button", { class: "btn nacre big wide", type: "button", onclick: onRelu, title: "Raccourci : " + (MAC ? "⌘" : "Ctrl") + " + Entrée" }, iCheck(), "C’est relu", KEYS ? h("span", { class: "k", text: MAC ? "⌘↵" : "Ctrl ↵" }) : null));
+      if (a.statut !== "relu") b1.appendChild(h("button", { class: "btn good big wide", type: "button", onclick: onRelu, title: "Raccourci : " + (MAC ? "⌘" : "Ctrl") + " + Entrée" }, iCheck(), "C’est relu", KEYS ? h("span", { class: "k", text: MAC ? "⌘↵" : "Ctrl ↵" }) : null));
       else {
         if (ED.next) b1.appendChild(h("a", { class: "btn main big wide", href: link(ED.next) }, "Article suivant", chev("r")));
         b1.appendChild(h("button", { class: "lnk", type: "button", style: "margin-top:10px", text: "Remettre à relire", onclick: function () { save(a, { statut: "cours" }, { msg: "Remis à relire" }); } }));
@@ -2413,41 +2366,9 @@
     if (k) {
       var sans = A.filter(function (a) { return !a[k]; }).length;
       if (sans) root.appendChild(h("div", { class: "vote-cta" },
-        h("button", { class: "btn nacre big", type: "button", onclick: openTri }, "Voter", h("span", { class: "k", text: nf.format(sans) + " sans ton vote" })),
+        h("button", { class: "btn good big", type: "button", onclick: openTri }, "Voter", h("span", { class: "k", text: nf.format(sans) + " sans ton vote" })),
         KEYS ? h("span", { class: "small" }, h("kbd", { text: "V" }), " ouvre le vote depuis l’accueil ou ici") : null));
     }
-    // l'étagère : tous les articles, rangés par année comme des CD ; les retenus brillent
-    var shelf = h("section", { class: "shelf" },
-      h("div", { class: "shelf-h" }, h("h2", { class: "sec", text: "L’étagère" }), h("p", { class: "small", style: "margin:0", text: "Une tranche par article, dans l’ordre de parution. Un clic l’ouvre." })),
-      h("div", { class: "shelf-lg" },
-        h("span", {}, h("i", { class: "c-in" }), "Retenu"), h("span", {}, h("i", { style: "background:var(--bg-4);box-shadow:inset 0 -4px 0 #F6D77B" }), "À discuter"),
-        h("span", {}, h("i", { class: "c-wait" }), "Il manque un vote"), h("span", {}, h("i", { class: "c-out" }), "Refusé"),
-        k ? h("span", {}, h("i", { style: "width:7px;height:7px;border-radius:50%;background:var(--holo)" }), "Ton oui") : null));
-    var parY = {}, allIds = A.map(function (a) { return a.id; });
-    A.forEach(function (a) { var y = a.annee || "Sans date"; (parY[y] = parY[y] || []).push(a); });
-    Object.keys(parY).sort().forEach(function (y) {
-      var L = parY[y], nIn = L.filter(function (a) { return a.livre === "dedans"; }).length;
-      var sp = h("div", { class: "spines" });
-      L.forEach(function (a) {
-        var cls = "sp" + (a.livre === "dedans" ? " in" : a.livre === "discuter" ? " disc" : a.livre === "ecarte" ? " out" : "") + (k && a[k] === "oui" && a.livre !== "dedans" ? " me" : "");
-        sp.appendChild(h("a", { class: cls, href: link(a.id), onclick: openWith(allIds), style: "--c:" + rubOf(a.rub).hex, "data-id": a.id, "aria-label": a.titre },
-          h("span", { class: "sp-t", text: a.titre }), h("span", { class: "sp-n", text: pad3(numOf(a)) })));
-      });
-      shelf.appendChild(h("div", { class: "shelf-y" }, h("h3", {}, y, h("small", { text: plur(L.length, "article") + (nIn ? ", " + nIn + " retenu" + (nIn > 1 ? "s" : "") : "") })), sp));
-    });
-    function tipSp(e) {
-      shelf.style.setProperty("--mx", (e.clientX / Math.max(1, window.innerWidth)).toFixed(3));
-      var t = e.target.closest && e.target.closest(".sp");
-      if (!t) { hideTip(); return; }
-      var a = byId(t.dataset.id);
-      if (!a) return;
-      showTip(e.clientX, e.clientY, catNo(a) + " · " + a.titre, [
-        { c: rubOf(a.rub).hex, v: "", l: rubOne(a) + ", " + moisAn(a.date) },
-        { v: "Florian", l: LV_LAB[a.livreF] }, { v: "Amélien", l: LV_LAB[a.livreA] }]);
-    }
-    shelf.addEventListener("pointermove", tipSp);
-    shelf.addEventListener("pointerleave", hideTip);
-    root.appendChild(shelf);
     var dl = h("ul", { class: "blist" });
     if (!c.discuter.length) dl.appendChild(h("li", {}, h("p", { class: "small", text: "Aucun désaccord pour l’instant." })));
     var dIds = c.discuter.map(function (a) { return a.id; });
@@ -2636,7 +2557,6 @@
     }
     var a = T.queue[T.i], r = rubOf(a.rub), ok = otherKey();
     var card = h("article", { class: "tcard" },
-      h("div", { class: "tc-jk" }, jacket(a)),
       h("div", { class: "tc-h" },
         h("div", { class: "meta" }, h("span", {}, h("i", { class: "sw", style: "background:" + r.hex }), rubOne(a)), h("span", { text: moisAn(a.date) }), a.mots ? h("span", { text: "≈ " + minLecture(a) + " min de lecture" }) : null),
         h("h4", { text: a.titre }),
@@ -2653,9 +2573,9 @@
     card.addEventListener("pointercancel", end);
     body.appendChild(card);
     body.appendChild(h("div", { class: "tri-btns" },
-      h("button", { type: "button", class: "n", onclick: function () { triVote("non"); } }, h("span", { class: "cap", text: "1" }), "Non", h("small", {}, h("kbd", { text: "←" }))),
-      h("button", { type: "button", class: "p", onclick: function () { triVote("peut"); } }, h("span", { class: "cap", text: "2" }), "Peut-être", h("small", {}, h("kbd", { text: "↓" }))),
-      h("button", { type: "button", class: "o", onclick: function () { triVote("oui"); } }, h("span", { class: "cap", text: "3" }), "Oui", h("small", {}, h("kbd", { text: "→" })))));
+      h("button", { type: "button", class: "n", onclick: function () { triVote("non"); } }, "Non", h("small", {}, h("kbd", { text: "←" }), " ou ", h("kbd", { text: "1" }))),
+      h("button", { type: "button", class: "p", onclick: function () { triVote("peut"); } }, "Peut-être", h("small", {}, h("kbd", { text: "↓" }), " ou ", h("kbd", { text: "2" }))),
+      h("button", { type: "button", class: "o", onclick: function () { triVote("oui"); } }, "Oui", h("small", {}, h("kbd", { text: "→" }), " ou ", h("kbd", { text: "3" })))));
     body.appendChild(h("div", { class: "tri-foot" },
       h("button", { class: "lnk", type: "button", text: "Annuler le dernier", disabled: T.hist.length ? null : true, onclick: triUndo }),
       h("span", { class: "small", text: "Glisse la carte, ou utilise le clavier." }),
