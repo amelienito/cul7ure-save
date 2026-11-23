@@ -93,7 +93,7 @@
   function link(id) { return "#/a/" + encodeURIComponent(id); }
   function icon(st, size) {
     size = size || 20;
-    var col = { critical: "#FF6F8E", serious: "#FF9F70", warn: "#FFC978", info: "#93BDB0", good: "#4CC7A1", cours: "#7CF7DD", todo: "#5F8C80" }[st];
+    var col = { critical: "#B42318", serious: "#C4511A", warn: "#B7791F", info: "#5D564C", good: "#0A7D3E", cours: "#1FC266", todo: "#8B8376" }[st];
     var svg = s("svg", { viewBox: "0 0 20 20", width: size, height: size, class: "ic", "aria-hidden": "true" });
     if (st === "critical") {
       svg.appendChild(s("path", { d: "M6.6 2h6.8L18 6.6v6.8L13.4 18H6.6L2 13.4V6.6z", fill: col }));
@@ -106,7 +106,7 @@
       svg.appendChild(s("path", { d: "M10 5.6v5.4M10 13.9v.1", stroke: "#041311", "stroke-width": "2", "stroke-linecap": "round" }));
     } else if (st === "good") {
       svg.appendChild(s("circle", { cx: 10, cy: 10, r: 8.2, fill: col }));
-      svg.appendChild(s("path", { d: "M6.2 10.2l2.5 2.5 5.1-5.3", stroke: "#03231B", "stroke-width": "2", fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round" }));
+      svg.appendChild(s("path", { d: "M6.2 10.2l2.5 2.5 5.1-5.3", stroke: "#fff", "stroke-width": "2", fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round" }));
     } else if (st === "cours") {
       svg.appendChild(s("circle", { cx: 10, cy: 10, r: 7.4, fill: "none", stroke: col, "stroke-width": "1.8" }));
       svg.appendChild(s("path", { d: "M10 2.6a7.4 7.4 0 0 1 0 14.8z", fill: col }));
@@ -496,93 +496,81 @@
     var k = myKey(), A = arts();
     var sans = A.filter(function (a) { return !a[k]; }).length;
     var reste = mine.length - relu;
-    // la phrase d'ouverture, comme une une de magazine
-    root.appendChild(h("h1", { class: "page statement" },
-      h("em", { text: "Salut " + cfg.qui + "." }), " ",
-      reste ? [h("span", { text: "Il te reste " }), h("em", { text: nf.format(reste) + " article" + (reste > 1 ? "s" : "") }), h("span", { text: " à relire, " })]
-        : h("span", { text: "Tous tes articles sont relus, " }),
-      sans ? [h("em", { text: nf.format(sans) + " vote" + (sans > 1 ? "s" : "") }), h("span", { text: " à donner, " })] : null,
-      h("span", { text: "et " }), h("em", { text: "un livre" }), h("span", { text: " à sortir." })));
+    var o2 = A.filter(function (a) { return a.rel === o; }), o2r = o2.filter(function (a) { return a.statut === "relu"; }).length;
+    var home = h("div", { class: "home" });
+    root.appendChild(home);
+    // comme une page de magazine : surtitre, titre, chapeau avec lettrine
+    var jour = new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+    home.appendChild(h("p", { class: "kicker", text: "Relecture · " + jour }));
+    home.appendChild(h("h1", { class: "page", text: "Salut " + cfg.qui + "." }));
+    home.appendChild(h("p", { class: "standfirst", html: (reste ? "Il te reste <b>" + plur(reste, "article") + "</b> à relire" : "Tous tes articles sont relus") +
+      (sans ? (reste ? " et " : ", il reste ") + "<b>" + plur(sans, "vote") + "</b> à donner pour le livre" : "") + ". " +
+      esc(o) + " en est à " + o2r + " sur " + o2.length + ". Tout ce que tu corriges ici part directement dans les Google Docs." }));
     if (ls("bienvenue") === "1") {
-      root.appendChild(h("section", { class: "card hello" },
-        h("h2", { class: "sec", text: "Bienvenue, tout est déjà branché." }),
+      home.appendChild(h("section", { class: "hello" },
+        h("p", { class: "kicker", text: "Bienvenue" }),
         h("ol", { class: "how" },
-          h("li", { html: "Clique <b>Commencer la relecture</b> : le texte de ton prochain article s’ouvre." }),
+          h("li", { html: "Ouvre ton prochain article avec le grand bouton vert." }),
           h("li", { html: "Corrige-le directement dans la page, puis clique <b>C’est relu</b>." }),
           h("li", { html: "Dis si tu le veux dans le livre (<b>oui</b>, <b>peut-être</b> ou <b>non</b>), et passe au suivant." })),
-        h("p", { class: "small", text: "Tout s’enregistre tout seul dans les Google Docs. Tu peux t’arrêter et reprendre quand tu veux." }),
         h("button", { class: "btn main sm", type: "button", text: "Compris", onclick: function () { ls("bienvenue", null); render(true); } })));
     }
     var autreActif = ALL.some(function (a) { return a.majPar === o; });
     if (!autreActif && !ls("invite-" + o)) {
-      root.appendChild(h("section", { class: "card hello" },
-        h("h2", { class: "sec", text: "Invite " + o }),
-        h("p", { class: "hint", text: "Envoie-lui ce lien : en l’ouvrant, il arrive directement sur sa liste, déjà connecté. Il n’a rien à installer ni à taper." }),
+      home.appendChild(h("section", { class: "hello" },
+        h("p", { class: "kicker", text: "Invite " + o }),
+        h("p", { class: "hint", style: "margin:8px 0 12px", text: "En ouvrant ce lien, il arrive directement sur sa liste, déjà connecté. Rien à installer ni à taper." }),
         h("div", { class: "row" },
           h("button", { class: "btn main", type: "button", text: "Envoyer le lien à " + o, onclick: function () { shareInvite(o); } }),
           h("button", { class: "lnk", type: "button", text: "C’est fait, masquer", onclick: function () { ls("invite-" + o, "1"); render(true); } }))));
     }
-    // la double page : la couverture du prochain article, et la suite de ta liste
-    var spread = h("section", { class: "spread" });
-    var left = h("div", { class: "spread-l" });
+    // le bandeau vert : le prochain article, comme la photo de l'interview
     if (first) {
-      left.appendChild(coverEl(first, first.statut === "cours" ? "À reprendre" : "Ton prochain article", openWith(qids)));
-      left.appendChild(h("div", { class: "cv-go" },
-        h("a", { class: "btn main big", href: link(first.id), onclick: openWith(qids) }, first.statut === "cours" ? "Reprendre la relecture" : "Commencer la relecture"),
-        h("a", { class: "lnk", href: "#/articles?vue=moi&etat=arelire", text: "Toute ma liste (" + q.length + ")" })));
+      var page = 1, p0 = 0;
+      A.forEach(function (a) { if (a.id === first.id) p0 = page; if (a.livre !== "ecarte") page += pages(a.mots); });
+      var ex = first.extrait ? (first.extrait.length > 200 ? first.extrait.slice(0, 190).replace(/\s+\S*$/, "") + "…" : first.extrait) : "";
+      home.appendChild(h("a", { class: "band", href: link(first.id), onclick: openWith(qids) },
+        h("span", { class: "band-k", text: (first.statut === "cours" ? "À reprendre" : "Ton prochain article") + " · " + (first.rub || "").replace(/s$/, "") + " · " + moisAn(first.date) }),
+        h("span", { class: "band-t", text: first.titre }),
+        ex ? h("span", { class: "band-x", text: ex }) : null,
+        h("span", { class: "band-go", text: first.statut === "cours" ? "Reprendre la relecture" : "Commencer la relecture" })));
+      home.appendChild(h("p", { class: "caption", text: "Écrit par " + (first.auteur || "un auteur inconnu") + ", ≈ " + minLecture(first) + " min de lecture" + (p0 ? ", page " + p0 + " du livre" : "") + "." }));
     } else {
-      left.appendChild(h("div", { class: "cover done" }, h("div", { class: "in" },
-        h("span", { class: "cv-k", text: "Bravo" }),
-        h("span", { class: "cv-t", text: mine.length ? "Tout est relu." : "Aucun article ne t’est attribué." }),
-        h("span", { class: "cv-x", text: "Il reste peut-être des votes pour le livre." }))));
+      home.appendChild(h("div", { class: "band" }, h("span", { class: "band-k", text: "Bravo" }), h("span", { class: "band-t", text: mine.length ? "Tout est relu." : "Aucun article ne t’est attribué." })));
     }
-    spread.appendChild(left);
-    var right = h("div", { class: "spread-r" });
+    // l'avancement, comme la signature de l'interview
+    var by = h("div", { class: "byline", "aria-label": "Avancement" });
+    [[cfg.qui, mine.length, relu], [o, o2.length, o2r]].forEach(function (x) {
+      var c = A.filter(function (a) { return a.rel === x[0] && a.statut === "cours"; }).length;
+      by.appendChild(h("div", { class: "r" }, h("b", { text: x[0] === cfg.qui ? "Toi" : x[0] }),
+        h("div", { class: "bar", role: "progressbar", "aria-label": "Relecture de " + x[0], "aria-valuemin": 0, "aria-valuemax": x[1], "aria-valuenow": x[2] },
+          h("i", { style: "width:" + (x[1] ? x[2] / x[1] * 100 : 0) + "%" }), h("i", { class: "l", style: "width:" + (x[1] ? c / x[1] * 100 : 0) + "%" })),
+        h("span", { class: "tab", text: x[2] + " / " + x[1] + " relus" })));
+    });
+    home.appendChild(by);
+    // la suite de la liste, numérotée comme les questions de l'interview
     if (q.length > 1) {
-      right.appendChild(h("h2", { class: "idx-h", text: "Ensuite dans ta liste" }));
-      var idx = h("ol", { class: "idx" });
-      q.slice(1, 8).forEach(function (a, i) {
-        idx.appendChild(h("li", {}, h("a", { href: link(a.id), onclick: openWith(qids) },
-          h("span", { class: "ix-t" }, a.titre, h("sup", { class: "tab", text: "(" + pad3(i + 2) + ")" })),
-          h("span", { class: "ix-m", text: a.rub + " · " + moisAn(a.date) + (a.auteur && a.auteur !== cfg.qui ? " · " + a.auteur : "") }))));
+      home.appendChild(h("p", { class: "kicker suite-h", text: "Ensuite dans ta liste" }));
+      var ol = h("ol", { class: "suite" });
+      q.slice(1, 7).forEach(function (a, i) {
+        ol.appendChild(h("li", {}, h("a", { href: link(a.id), onclick: openWith(qids) },
+          h("span", { class: "kk", text: (a.rub || "") + " · " + moisAn(a.date) + (a.auteur && a.auteur !== cfg.qui ? " · " + a.auteur : "") }),
+          h("span", { class: "t", text: a.titre }),
+          h("span", { class: "n", text: String(i + 2).padStart(2, "0") }))));
       });
-      right.appendChild(idx);
-      if (q.length > 8) right.appendChild(h("a", { class: "lnk", href: "#/articles?vue=moi&etat=arelire", text: "Et " + plur(q.length - 8, "autre") }));
+      home.appendChild(ol);
+      if (q.length > 7) home.appendChild(h("p", { style: "margin:14px 0 0" }, h("a", { class: "lnk", href: "#/articles?vue=moi&etat=arelire", text: "Toute ma liste (" + q.length + ")" })));
     }
-    spread.appendChild(right);
-    root.appendChild(spread);
-    // l'avancement et les raccourcis
     var disc = A.filter(function (a) { return a.livre === "discuter"; }).length;
     var ret = A.filter(function (a) { return a.livre === "dedans"; });
     var nProb = ALL.filter(function (a) { return a.tags.length; }).length;
-    var prog = h("section", { class: "prog", "aria-label": "Avancement" });
-    [cfg.qui, o].forEach(function (qq) {
-      var m = A.filter(function (a) { return a.rel === qq; });
-      var r = m.filter(function (a) { return a.statut === "relu"; }).length, c = m.filter(function (a) { return a.statut === "cours"; }).length;
-      prog.appendChild(h("div", { class: "row" },
-        h("b", { text: qq === cfg.qui ? "Toi" : qq }),
-        h("div", { class: "bar", role: "progressbar", "aria-label": "Relecture de " + qq, "aria-valuemin": 0, "aria-valuemax": m.length, "aria-valuenow": r },
-          h("i", { style: "width:" + (m.length ? r / m.length * 100 : 0) + "%" }), h("i", { class: "l", style: "width:" + (m.length ? c / m.length * 100 : 0) + "%" })),
-        h("span", { class: "tab", text: r + " / " + m.length + " relus" })));
-    });
-    root.appendChild(prog);
-    root.appendChild(h("section", { class: "tiles" },
-      h("button", { class: "tile", type: "button", onclick: openTri },
-        h("span", { class: "n tab", text: nf.format(sans) }),
-        h("b", { text: "Voter pour le livre" }),
-        h("span", { text: sans ? (sans > 1 ? "articles attendent ton vote. Le titre et l’extrait suffisent souvent." : "article attend ton vote.") : "Tous tes votes sont faits." })),
-      disc ? h("a", { class: "tile", href: "#/livre" },
-        h("span", { class: "n tab", text: nf.format(disc) }),
-        h("b", { text: "À discuter avec " + o }),
-        h("span", { text: "articles où vos votes ne sont pas d’accord." }))
-        : h("a", { class: "tile", href: "#/livre" },
-          h("span", { class: "n tab", text: nf.format(ret.length) }),
-          h("b", { text: "Le livre" }),
-          h("span", { text: "articles retenus pour l’instant, ≈ " + nf.format(ret.reduce(function (t2, a) { return t2 + pages(a.mots); }, 0)) + " pages." })),
-      h("a", { class: "tile", href: "#/articles?vue=tous&pb=1" },
-        h("span", { class: "n tab", text: nf.format(nProb) }),
-        h("b", { text: "Problèmes à régler" }),
-        h("span", { text: "auteurs ou dates à retrouver, spams à nettoyer, quand tu as un moment." }))));
+    home.appendChild(h("section", { class: "raccourcis" },
+      h("button", { class: "rc", type: "button", onclick: openTri },
+        h("span", { class: "n tab", text: nf.format(sans) }), h("b", { text: "Voter pour le livre" }),
+        h("span", { text: sans ? "Le titre et l’extrait suffisent souvent." : "Tous tes votes sont faits." })),
+      disc ? h("a", { class: "rc", href: "#/livre" }, h("span", { class: "n tab", text: nf.format(disc) }), h("b", { text: "À discuter avec " + o }), h("span", { text: "Vos votes ne sont pas d’accord." }))
+        : h("a", { class: "rc", href: "#/livre" }, h("span", { class: "n tab", text: nf.format(ret.length) }), h("b", { text: "Retenus pour le livre" }), h("span", { text: "≈ " + nf.format(ret.reduce(function (t2, a) { return t2 + pages(a.mots); }, 0)) + " pages pour l’instant." })),
+      h("a", { class: "rc", href: "#/articles?vue=tous&pb=1" }, h("span", { class: "n tab", text: nf.format(nProb) }), h("b", { text: "Problèmes à régler" }), h("span", { text: "Auteurs ou dates à retrouver, spams à nettoyer." }))));
   }
 
   function pad3(n) { return String(n).padStart(3, "0"); }
@@ -1013,9 +1001,15 @@
     typo: { lab: "Typographie", one: "Typographie" },
     rep: { lab: "Répétitions", one: "Répétition" },
     form: { lab: "Formulation", one: "Formulation" },
-    web: { lab: "Pensé pour le web", one: "Pensé pour le web" }
+    web: { lab: "Pensé pour le web", one: "Pensé pour le web" },
+    regle: { lab: "Règles Cul7ure", one: "Règle Cul7ure" }
   };
-  var CK_ORDER = ["ortho", "gram", "typo", "rep", "form", "web"];
+  var CK_ORDER = ["regle", "ortho", "gram", "typo", "rep", "form", "web"];
+  // les règles de la maison : artistes en gras à leur première mention seulement, titres d'œuvres en italique
+  var NOMS = window.CUL7URE_NOMS || { artistes: [], titres: [] };
+  var CK_CUE = /(?:titre|morceau|son|single|album|projet|EP|mixtape|clip|film|livre|freestyle|track|tape|disque|opus|série|documentaire|émission|chanson)s?\s*(?:intitulée?s?|nommée?s?)?\s*[«"“]?\s*$/i;
+  function ckNorm(s) { return String(s).replace(/\s+/g, " ").replace(/^[\s«»"“”'’(\-–—:,.;!?]+|[\s«»"“”(\-–—:,.;!?]+$/g, "").trim(); }
+  function ckEsc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
   // ce qui ne marche que sur une page web : renvois à un lien, à une vidéo, aux lecteurs du site
   var CK_WEB = [
     [/\b(?:cliquez|cliquer|clique|cliqué)\b(?: (?:ici|là|dessus|sur (?:ce|le) lien))?/gi, "Renvoi vers un lien : sur papier, on ne peut plus cliquer."],
@@ -1115,7 +1109,16 @@
       var segs = [], text = "", links = [], tw = document.createTreeWalker(bl, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT), n;
       while ((n = tw.nextNode())) {
         if (n.nodeType === 1) { if (n.tagName === "BR") text += "\n"; continue; }
-        segs.push({ n: n, s: text.length });
+        // le plus proche parent qui décide du gras (ou de l'italique) l'emporte
+        var fb = null, fi = null;
+        for (var up = n.parentElement; up; up = up.parentElement) {
+          var tg2 = up.tagName, fw = up.style && up.style.fontWeight, fs = up.style && up.style.fontStyle;
+          if (fb === null) { if (fw) fb = fw === "bold" || +fw >= 600; else if (tg2 === "B" || tg2 === "STRONG") fb = true; }
+          if (fi === null) { if (fs) fi = fs === "italic"; else if (tg2 === "I" || tg2 === "EM") fi = true; }
+          if (up === bl) break;
+        }
+        fb = !!fb; fi = !!fi;
+        segs.push({ n: n, s: text.length, b: fb, i: fi });
         var an = n.parentElement && n.parentElement.closest("a");
         if (an && bl.contains(an)) {
           var lk = links[links.length - 1];
@@ -1125,7 +1128,7 @@
         text += n.nodeValue;
       }
       if (bl.classList.contains("note")) return; // notes de travail : [Image…], Source…
-      out.push({ el: bl, text: text, segs: segs, links: links, q: !!bl.closest("blockquote"), quotes: ckQuotes(text) });
+      out.push({ el: bl, text: text, segs: segs, links: links, q: !!bl.closest("blockquote"), quotes: ckQuotes(text), corps: (bl.tagName === "P" || bl.tagName === "LI") && !bl.classList.contains("sig") && !bl.closest("blockquote") });
     });
     return out;
   }
@@ -1236,6 +1239,7 @@
         }
       }
     });
+    ckRegles(blocks, push);
     // répétitions proches
     var toks = [], wre = /[A-Za-zÀ-ÖØ-öø-ÿŒœÆæ]+(?:-[A-Za-zÀ-ÖØ-öø-ÿŒœ]+)*/g;
     blocks.forEach(function (b, bi) {
@@ -1263,7 +1267,7 @@
     });
     out.forEach(function (it) { if (it.prev) it.prevR = ckRange(blocks[it.prev.b], it.prev.s, it.prev.s + it.prev.w.length); });
     // une même portée signalée deux fois : on garde la remarque la plus précise
-    var prio = { web: 0, ortho: 1, gram: 2, typo: 3, form: 4, rep: 5 }, best = {};
+    var prio = { regle: 0, web: 1, ortho: 2, gram: 3, typo: 4, form: 5, rep: 6 }, best = {};
     out.forEach(function (it) {
       var k2 = it.b + ":" + it.s + ":" + it.e;
       if (!best[k2] || prio[it.k] < prio[best[k2].k] || (prio[it.k] === prio[best[k2].k] && it.rule === "tic")) best[k2] = it;
@@ -1360,6 +1364,8 @@
         h("i"), h("span", { text: CK_KINDS[k].lab }), h("b", { class: "tab", text: String(c[k] || 0) })));
     });
     box.appendChild(chips);
+    var nR = CK.issues.filter(function (x) { return x.k === "regle" && x.acts && CK_FMT[x.acts[0]]; }).length;
+    if (nR) box.appendChild(h("button", { class: "btn main sm wide", type: "button", style: "margin-bottom:8px", text: "Appliquer les règles Cul7ure (" + nR + ")", onclick: ckReglesPartout }));
     if (ckVisible().length) box.appendChild(h("button", { class: "btn ghost sm wide", type: "button", text: "Passer les remarques en revue", onclick: function () { ckNext(1); } }));
     var nl = 0, nv = 0;
     CK.ed.querySelectorAll("a[href]").forEach(function (an) { if (an.closest("p.note")) nv++; else nl++; });
@@ -1455,6 +1461,14 @@
       var ra = h("div", { class: "ck-opts" });
       it.acts.forEach(function (act) {
         var t0 = it.bt || "", pv;
+        if (CK_FMT[act]) {
+          var cxf = ckCtx(t0, it.s, it.e), w0 = t0.slice(it.s, it.e);
+          var tl = cxf.pre.split(" ").slice(-6).join(" "), hd = cxf.post.split(" ").slice(0, 8).join(" ");
+          var mk = act === "gras" ? h("b", { text: w0 }) : act === "degras" ? h("span", { class: "plain", text: w0 }) : h("i", { text: w0 });
+          pv = h("span", { class: "pv" }, (tl.length < cxf.pre.length ? "…" : "") + tl, mk, hd + (hd.length < cxf.post.length ? "…" : ""));
+          ra.appendChild(h("button", { type: "button", class: "ck-opt", onclick: function () { ckAct(it, act); } }, pv, h("span", { class: "go", text: CK_FMT[act] })));
+          return;
+        }
         if (act === "delpar") pv = h("span", { class: "pv" }, h("del", { text: t0.length > 160 ? t0.slice(0, 150) + "…" : t0 }));
         else {
           var bd = ckSent(t0, it.s, it.e), sent = t0.slice(bd[0], bd[1]).trim();
@@ -1468,7 +1482,7 @@
           h("span", { class: "go", text: act === "delpar" ? "Supprimer le paragraphe" : "Supprimer la phrase" })));
       });
       pop.appendChild(ra);
-      pop.appendChild(h("p", { class: "ck-lab", text: "Si la phrase dit autre chose d’utile, « Je reformule » la garde et te laisse la réécrire." }));
+      if (it.k !== "regle") pop.appendChild(h("p", { class: "ck-lab", text: "Si la phrase dit autre chose d’utile, « Je reformule » la garde et te laisse la réécrire." }));
     } else {
       pop.appendChild(h("p", { class: "ck-lab", text: "Pas de remplacement automatique ici : la phrase est à reformuler à la main." }));
     }
@@ -1537,6 +1551,104 @@
     // on enchaîne sur la remarque suivante
     for (var i = 0; i < CK.issues.length; i++) { var x = CK.issues[i]; if (!CK.hide[x.k] && (x.b > b || (x.b === b && x.s > s))) { ckOpen(i, true); return; } }
   }
+  // gras / italique sur une portée d'un bloc
+  function ckFmtSpan(b, s, e) {
+    var allB = true, anyB = false, allI = true, n = 0;
+    b.segs.forEach(function (g) {
+      var L = g.n.nodeValue.length, a = Math.max(s, g.s), z = Math.min(e, g.s + L);
+      if (z <= a) return;
+      if (!b.text.slice(a, z).trim()) return;
+      n++;
+      if (g.b) anyB = true; else allB = false;
+      if (!g.i) allI = false;
+    });
+    return { b: n > 0 && allB, anyB: anyB, i: n > 0 && allI };
+  }
+  // les morceaux en gras / en italique d'un bloc, regroupés
+  function ckSpans(b, key) {
+    var out = [], cur = null;
+    b.segs.forEach(function (g) {
+      var L = g.n.nodeValue.length;
+      if (g[key]) { if (cur && cur.e === g.s) cur.e = g.s + L; else { cur = { s: g.s, e: g.s + L }; out.push(cur); } }
+      else cur = null;
+    });
+    return out;
+  }
+  function ckDebut(t, i) { var j = i - 1; while (j >= 0 && /[\s«"“(]/.test(t[j])) j--; return j < 0 || /[.!?…:]/.test(t[j]); }
+  function ckRegles(blocks, push) {
+    var corps = [];
+    blocks.forEach(function (b, bi) { if (b.corps) corps.push(bi); });
+    if (!corps.length) return;
+    var noms = {}, titres = {}, gTitres = [];
+    // ce que l'article met lui-même en gras ou en italique
+    corps.forEach(function (bi) {
+      var b = blocks[bi];
+      ckSpans(b, "b").forEach(function (sp) {
+        if (ckFmtSpan(b, sp.s, sp.e).i) return;
+        var raw = b.text.slice(sp.s, sp.e), n = ckNorm(raw);
+        if (!n || n.length < 2 || n.length > 48 || n.split(" ").length > 7) return;
+        if (CK_CUE.test(b.text.slice(Math.max(0, sp.s - 30), sp.s))) {
+          var off = sp.s + raw.indexOf(n);
+          gTitres.push({ b: bi, s: off, e: off + n.length, n: n });
+          return;
+        }
+        if (/^[A-ZÀ-ÝŒ0-9$]/.test(n)) noms[n] = 1;
+      });
+      ckSpans(b, "i").forEach(function (sp) {
+        var n = ckNorm(b.text.slice(sp.s, sp.e));
+        if (n && n.length >= 2 && n.length <= 60 && /^[A-ZÀ-ÝŒ0-9]/.test(n)) titres[n] = 1;
+      });
+    });
+    var local = {};
+    Object.keys(noms).forEach(function (n) { local[n] = 1; });
+    var all = corps.map(function (bi) { return blocks[bi].text; }).join("\n");
+    NOMS.artistes.forEach(function (n) { if (all.indexOf(n) >= 0) noms[n] = 1; });
+    NOMS.titres.forEach(function (n) { if (all.indexOf(n) >= 0) titres[n] = 1; });
+    gTitres.forEach(function (g) { delete noms[g.n]; titres[g.n] = 1; });
+    // un titre mis en gras (« le titre Le temps béni des colonies ») : en italique
+    gTitres.forEach(function (g) {
+      push({ k: "regle", b: g.b, s: g.s, e: g.e, txt: g.n, msg: "« " + g.n + " » est un titre d’œuvre : en italique, pas en gras.", reps: [], acts: ["b2i"], rule: "b2i" });
+    });
+    var pris = {};
+    function libre(bi, s, e) { var l = pris[bi] || []; return !l.some(function (x) { return s < x[1] && e > x[0]; }); }
+    function prendre(bi, s, e) { (pris[bi] = pris[bi] || []).push([s, e]); }
+    // les artistes : en gras la première fois, plus ensuite (les noms longs d'abord)
+    Object.keys(noms).filter(function (n) { return !titres[n]; }).sort(function (x, y) { return y.length - x.length; }).forEach(function (n) {
+      var re = new RegExp("(?<![\\p{L}\\p{N}])" + ckEsc(n) + "(?![\\p{L}\\p{N}])", "gu"), occ = [];
+      corps.forEach(function (bi) {
+        var b = blocks[bi], m;
+        re.lastIndex = 0;
+        while ((m = re.exec(b.text))) {
+          if (!libre(bi, m.index, m.index + n.length)) continue;
+          if (!local[n] && n.indexOf(" ") < 0 && ckDebut(b.text, m.index)) continue;
+          occ.push({ bi: bi, s: m.index, e: m.index + n.length, f: ckFmtSpan(b, m.index, m.index + n.length) });
+        }
+      });
+      if (!occ.length) return;
+      occ.forEach(function (o) { prendre(o.bi, o.s, o.e); });
+      if (!occ[0].f.b) push({ k: "regle", b: occ[0].bi, s: occ[0].s, e: occ[0].e, txt: n, msg: "Première mention de « " + n + " » : en gras (les artistes en gras à leur première apparition).", reps: [], acts: ["gras"], rule: "gras1" });
+      occ.slice(1).forEach(function (o) {
+        if (o.f.anyB) push({ k: "regle", b: o.bi, s: o.s, e: o.e, txt: n, msg: "« " + n + " » est déjà en gras plus haut : seule la première mention l’est.", reps: [], acts: ["degras"], rule: "gras2" });
+      });
+    });
+    // les titres : en italique à chaque fois
+    Object.keys(titres).sort(function (x, y) { return y.length - x.length; }).forEach(function (n) {
+      if (n.length < 3) return;
+      var re = new RegExp("(?<![\\p{L}\\p{N}])" + ckEsc(n) + "(?![\\p{L}\\p{N}])", "gu");
+      corps.forEach(function (bi) {
+        var b = blocks[bi], m;
+        re.lastIndex = 0;
+        while ((m = re.exec(b.text))) {
+          var s = m.index, e = s + n.length;
+          if (!libre(bi, s, e)) continue;
+          if (n.indexOf(" ") < 0 && ckDebut(b.text, s)) continue;
+          prendre(bi, s, e);
+          var f = ckFmtSpan(b, s, e);
+          if (!f.i && !f.anyB) push({ k: "regle", b: bi, s: s, e: e, txt: n, msg: "« " + n + " » est un titre d’œuvre : en italique.", reps: [], acts: ["ital"], rule: "ital" });
+        }
+      });
+    });
+  }
   function ckSent(t, s, e) {
     var a = s, z = e;
     while (a > 0 && !/[.!?…\n]/.test(t[a - 1])) a--;
@@ -1546,8 +1658,38 @@
     while (z < t.length && /[ \u00a0\u202f]/.test(t[z])) z++;
     return [a, z];
   }
+  function ckFormat(it, act) {
+    var sel = window.getSelection(), r = it.r && it.r.cloneRange();
+    if (!r) return false;
+    CK.ed.focus();
+    sel.removeAllRanges(); sel.addRange(r);
+    if (act === "gras" || act === "degras") document.execCommand("bold");
+    else if (act === "ital") document.execCommand("italic");
+    else if (act === "b2i") { document.execCommand("bold"); document.execCommand("italic"); }
+    sel.collapseToEnd();
+    return true;
+  }
+  var CK_FMT = { gras: "Mettre en gras", degras: "Enlever le gras", ital: "Mettre en italique", b2i: "Passer en italique" };
+  function ckReglesPartout() {
+    var n = 0, garde = 0;
+    while (garde++ < 400) {
+      ckRun();
+      var it = CK.issues.filter(function (x) { return x.k === "regle" && x.acts && CK_FMT[x.acts[0]]; })[0];
+      if (!it || !ckFormat(it, it.acts[0])) break;
+      n++;
+    }
+    if (n) { markDirty(); toast(plur(n, "correction") + " de mise en forme appliquée" + (n > 1 ? "s" : "") + ". Vérifie d’un œil, puis enregistre."); }
+    ckClose(); ckRun();
+  }
   function ckAct(it, act) {
     if (!CK.ed || !it.blk) return;
+    if (CK_FMT[act]) {
+      var b0 = it.b, s0 = it.s;
+      if (!ckFormat(it, act)) return;
+      markDirty(); ckClose(); clearTimeout(CK.t); ckRun();
+      for (var j = 0; j < CK.issues.length; j++) { var y = CK.issues[j]; if (!CK.hide[y.k] && (y.b > b0 || (y.b === b0 && y.s > s0))) { ckOpen(j, true); return; } }
+      return;
+    }
     var sel = window.getSelection(), r, el = it.blk.el;
     if (act === "delpar") { r = document.createRange(); r.selectNode(el); }
     else { var bd = ckSent(it.bt || "", it.s, it.e); r = ckRange(it.blk, bd[0], bd[1]); }
